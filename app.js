@@ -8,6 +8,28 @@ const UA = 'RadiosSketchApp/1.0';
 const STORE_KEY = 'radios_playlist';
 const APP_VERSION = '1.1.0';
 
+// Radios patrocinadas que SIEMPRE aparecen al iniciar
+const SPONSORED_STATIONS = [
+  {
+    uuid: 'sponsored-1',
+    name: 'Radio Forever',
+    url: 'https://streaming.radioforever.com/radio/8000/radio.mp3',
+    tags: 'pop, rock, hits',
+    country: 'Sponsored',
+    bitrate: '128',
+    is_sponsored: true
+  },
+  {
+    uuid: 'sponsored-2',
+    name: 'Positively 80s',
+    url: 'http://149.56.147.197:8121/stream',
+    tags: '80s, retro, pop',
+    country: 'Sponsored',
+    bitrate: '128',
+    is_sponsored: true
+  }
+];
+
 let player = null;
 let playlist = [];
 let deepDb = [];
@@ -26,6 +48,13 @@ async function init() {
   }
 
   playlist = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+
+  // Inyectar patrocinadas (asegurando que no se repitan)
+  SPONSORED_STATIONS.forEach(sponsored => {
+    if (!playlist.some(p => p.uuid === sponsored.uuid)) {
+      playlist.unshift(sponsored); // Al principio de la lista
+    }
+  });
 
   // Load Deep Search Database
   try {
@@ -678,7 +707,9 @@ function removeFromPlaylist(uuid) {
 }
 
 function persistPlaylist() {
-  localStorage.setItem(STORE_KEY, JSON.stringify(playlist));
+  // Guardar solo las que no son patrocinadas para que el "patrocinio" sea fresco cada vez
+  const toSave = playlist.filter(s => !s.is_sponsored);
+  localStorage.setItem(STORE_KEY, JSON.stringify(toSave));
 }
 
 function updateResultAddButton(uuid, added) {
