@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Radios App</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Patrick+Hand&family=Courier+Prime&display=swap" rel="stylesheet">
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Plyr CSS -->
+  <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css">
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+
+  <main class="winamp-container">
+    <!-- Main Winamp Window -->
+    <div class="winamp-skin" id="radioFrame">
+      
+      <!-- Title Bar -->
+      <div class="winamp-title-bar">
+        <div class="winamp-mini-icon"><i class="fas fa-bolt"></i></div>
+        <div class="winamp-title-text">WINAMP - RADIOS APP</div>
+        <div class="winamp-window-controls">
+          <button class="winamp-btn-util" id="btnHardRefresh" title="Update App"><i class="fas fa-sync-alt"></i></button>
+          <div class="winamp-btn-mini">_</div>
+          <div class="winamp-btn-mini">□</div>
+          <div class="winamp-btn-mini btn-close">X</div>
+        </div>
+      </div>
+
+      <!-- Upper Body: Visualizer & Info -->
+      <div class="winamp-main-body">
+        <div class="winamp-display-section">
+          <div class="winamp-visualizer">
+            <canvas id="equalizer" class="winamp-spec"></canvas>
+          </div>
+          <div class="winamp-info">
+            <div class="winamp-time" id="radioDisplayTime">00:00</div>
+            <div class="winamp-kbps" id="plCount">0 radios</div>
+            <div class="winamp-khz">44 kHz</div>
+          </div>
+        </div>
+
+        <div class="winamp-song-title">
+          <marquee behavior="scroll" direction="left" id="radioDisplay">Winamp Radios App - Listo para sintonizar...</marquee>
+        </div>
+
+        <!-- Integrated Search Bar (Inside Player) -->
+        <div class="winamp-internal-search">
+          <input type="text" id="searchInput" placeholder="Search..." autocomplete="off">
+          <select id="filterBitrate" class="winamp-mini-select" title="Bitrate">
+            <option value="0">Qual</option>
+            <option value="128">128k</option>
+            <option value="192">192k</option>
+          </select>
+          <select id="filterCodec" class="winamp-mini-select" title="Codec">
+            <option value="">Codec</option>
+            <option value="MP3">MP3</option>
+            <option value="AAC">AAC</option>
+          </select>
+          <button id="btnDeepSearch" title="Deep Search"><i class="fas fa-globe"></i></button>
+        </div>
+      </div>
+
+      <!-- Middle Controls -->
+      <div class="winamp-controls">
+        <div class="winamp-buttons-group">
+          <button class="winamp-btn" id="btnPrev"><i class="fas fa-step-backward"></i></button>
+          <button class="winamp-btn btn-play-main" id="btnPlayWinamp"><i class="fas fa-play"></i></button>
+          <button class="winamp-btn" id="btnPause"><i class="fas fa-pause"></i></button>
+          <button class="winamp-btn" id="btnStop"><i class="fas fa-stop"></i></button>
+          <button class="winamp-btn" id="btnNext"><i class="fas fa-step-forward"></i></button>
+        </div>
+        
+        <div class="winamp-playlist-tabs">
+          <button class="tab-btn active" id="tabResults">RESULTADOS</button>
+          <button class="tab-btn" id="tabPlaylist">PLAYLIST</button>
+        </div>
+      </div>
+
+      <!-- Integrated Content (Internal Scrolling) -->
+      <div class="winamp-content-area">
+        <div id="resultsSection" class="content-scroll">
+          <div id="results" class="results-list"></div>
+        </div>
+        <div id="playlistSection" class="content-scroll hidden">
+          <div id="playlist" class="playlist-list"></div>
+        </div>
+      </div>
+
+      <!-- Bottom Toolbar (Winamp Style) -->
+      <div class="winamp-footer">
+        <div class="winamp-footer-btns">
+          <button class="btn-footer" id="btnExportJSON" title="Save JSON">SAVE</button>
+          <button class="btn-footer" id="btnImportJSON" title="Load JSON">LOAD</button>
+        </div>
+        <div class="winamp-resize-handle">//</div>
+      </div>
+
+      <!-- Hidden Audio -->
+      <div class="radio-player hidden">
+        <audio id="audioPlayer" playsinline></audio>
+      </div>
+    </div>
+  </main>
+
+
+  <!-- ── Scripts ── -->
+  <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>

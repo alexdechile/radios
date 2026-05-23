@@ -1,0 +1,328 @@
+/* =============================================
+   RADIOS APP — True Winamp Skin
+   Todo integrado en un solo chasis
+   ============================================= */
+
+/* ── CSS Custom Properties ── */
+:root {
+  --crema: #FFF8EC;
+  --grafito: #3B3632;
+  --grafito-luz: #8A8078;
+  --ocre: #D4A017;
+  --anaranjado: #E8572A;
+  --rojo: #9E2A2B;
+  --azul: #1A4B8A;
+  --pistacho: #8BA84D;
+  --winamp-bg: #2B2A29;
+  --winamp-green: #00FF00;
+}
+
+/* ── Base ── */
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* No outer scroll */
+  background: var(--crema);
+  font-family: 'Patrick Hand', cursive;
+}
+
+.winamp-container {
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+/* ── Winamp Skin Chassis ── */
+.winamp-skin {
+  width: 100%;
+  max-width: 400px;
+  height: 95vh;
+  background: var(--winamp-bg);
+  border: 3px solid var(--grafito);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 6px 6px 0 var(--grafito);
+  padding: 2px;
+  position: relative;
+}
+
+/* Title Bar */
+.winamp-title-bar {
+  background: var(--azul);
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  border-bottom: 2px solid var(--grafito);
+  cursor: default;
+}
+
+.winamp-window-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.winamp-btn-mini {
+  width: 16px;
+  height: 16px;
+  border: 1px solid white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+}
+
+/* Upper Body */
+.winamp-main-body {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #333;
+  border-bottom: 2px solid var(--grafito);
+}
+
+.winamp-display-section {
+  display: flex;
+  gap: 10px;
+  background: #000;
+  border: 2px solid var(--grafito);
+  padding: 8px;
+  border-radius: 4px;
+}
+
+.winamp-visualizer {
+  width: 80px;
+  height: 40px;
+  background: #111;
+}
+
+.winamp-info {
+  flex: 1;
+  text-align: right;
+}
+
+.winamp-time {
+  font-size: 1.8rem;
+  color: var(--winamp-green);
+  line-height: 1;
+  text-shadow: 0 0 5px var(--winamp-green);
+}
+
+.winamp-kbps {
+  font-size: 0.6rem;
+  color: var(--winamp-green);
+  opacity: 0.7;
+}
+
+.winamp-song-title {
+  background: #000;
+  color: var(--winamp-green);
+  padding: 4px;
+  border: 1px solid var(--grafito);
+  font-size: 0.8rem;
+  overflow: hidden;
+}
+
+/* Internal Search */
+.winamp-internal-search {
+  display: flex;
+  gap: 4px;
+}
+
+.winamp-internal-search input {
+  flex: 1;
+  background: #000;
+  border: 2px solid var(--grafito);
+  color: var(--winamp-green);
+  padding: 4px 8px;
+  font-family: 'Courier Prime', monospace;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.winamp-internal-search button {
+  background: var(--azul);
+  border: 2px solid var(--grafito);
+  color: white;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.winamp-mini-select {
+  background: #000;
+  border: 2px solid var(--grafito);
+  color: var(--winamp-green);
+  font-family: 'Courier Prime', monospace;
+  font-size: 0.7rem;
+  outline: none;
+  max-width: 60px;
+}
+
+/* Controls */
+.winamp-controls {
+  padding: 10px 8px;
+  background: var(--winamp-bg);
+  border-bottom: 2px solid var(--grafito);
+}
+
+.winamp-buttons-group {
+  display: flex;
+  justify-content: center;
+  gap: 3px;
+  margin-bottom: 10px;
+}
+
+.winamp-btn {
+  background: #D1D1D1;
+  border: 2px solid var(--grafito);
+  padding: 6px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.btn-play-main { background: var(--pistacho); color: white; }
+
+.winamp-playlist-tabs {
+  display: flex;
+  border: 1px solid #444;
+}
+
+.winamp-playlist-tabs .tab-btn {
+  flex: 1;
+  background: #111;
+  color: #888;
+  border: none;
+  padding: 5px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.winamp-playlist-tabs .tab-btn.active {
+  background: #333;
+  color: var(--winamp-green);
+}
+
+/* Content Area (Internal Scroll) */
+.winamp-content-area {
+  flex: 1;
+  background: #000;
+  margin: 5px;
+  border: 2px solid var(--grafito);
+  overflow: hidden;
+  position: relative;
+}
+
+.content-scroll {
+  height: 100%;
+  overflow-y: auto;
+  padding: 5px;
+}
+
+/* Station Card (Compact for Winamp) */
+.station-card, .pl-item {
+  background: #111;
+  border: 1px solid #333;
+  margin-bottom: 2px;
+  padding: 8px; /* Slightly more padding */
+  min-height: 48px; /* Comfortable touch height */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #AAA;
+  font-size: 0.85rem;
+}
+
+.station-card:hover, .station-card.playing {
+  background: #222;
+  color: var(--winamp-green);
+  border-color: var(--winamp-green);
+}
+
+.station-icon, .station-icon-placeholder {
+  width: 22px; /* Slightly smaller icon to give more room to text/buttons */
+  height: 22px;
+  border-radius: 4px;
+}
+
+.station-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.station-name, .pl-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: bold;
+  font-size: 1rem;
+  color: #EEE;
+  font-family: 'Caveat', cursive;
+}
+
+.station-meta { display: none; } /* Hide meta for speed/compactness */
+
+.btn-play, .btn-add, .btn-dismiss, .btn-remove, .btn-play-small {
+  background: #333;
+  border: 2px solid var(--grafito);
+  color: #AAA;
+  width: 32px; /* Larger for mobile thumbs */
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.85rem;
+  border-radius: 6px;
+}
+
+.btn-play:hover, .btn-play-small:hover { color: var(--winamp-green); border-color: var(--winamp-green); }
+.btn-remove:hover { color: var(--rojo); border-color: var(--rojo); }
+
+/* Footer */
+.winamp-footer {
+  padding: 4px 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--winamp-bg);
+  border-top: 1px solid #444;
+}
+
+.btn-footer {
+  background: transparent;
+  border: 1px solid #555;
+  color: #888;
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.winamp-resize-handle {
+  color: #444;
+  font-size: 0.8rem;
+}
+
+.hidden { display: none !important; }
+
+/* Custom Scrollbar */
+.content-scroll::-webkit-scrollbar { width: 8px; }
+.content-scroll::-webkit-scrollbar-track { background: #000; }
+.content-scroll::-webkit-scrollbar-thumb { background: #333; border: 1px solid #555; }
+
+/* Utilities */
+.winamp-btn-util {
+  background: transparent;
+  border: none;
+  color: white;
+  cursor: pointer;
+}
