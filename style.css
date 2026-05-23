@@ -24,7 +24,7 @@ html, body {
   padding: 0;
   overflow: hidden; /* No outer scroll */
   background: var(--crema);
-  font-family: 'Patrick Hand', cursive;
+  font-family: 'Share Tech Mono', monospace;
 }
 
 .winamp-container {
@@ -266,7 +266,7 @@ html, body {
   font-weight: bold;
   font-size: 1rem;
   color: #EEE;
-  font-family: 'Caveat', cursive;
+  font-family: 'Orbitron', sans-serif;
 }
 
 .station-meta { display: none; } /* Hide meta for speed/compactness */
