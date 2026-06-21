@@ -347,9 +347,9 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    socketserver.TCPServer.allow_reuse_address = True
+    socketserver.ThreadingTCPServer.allow_reuse_address = True
     handler = RadiosHandler
-    with socketserver.TCPServer(("", PORT), handler) as httpd:
+    with socketserver.ThreadingTCPServer(("", PORT), handler) as httpd:
         print(
             f"Serving Radios with Deep Search at http://localhost:{PORT}",
             file=sys.stderr,

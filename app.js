@@ -503,7 +503,14 @@ async function search(query) {
     const exactMatches = merged.filter(s => (s.name || '').toLowerCase().includes(q.toLowerCase()));
     const relatedMatches = merged.filter(s => !(s.name || '').toLowerCase().includes(q.toLowerCase()));
 
-    const finalMerged = [...exactMatches, ...relatedMatches];
+    // Prioritize HTTPS over HTTP to avoid proxy (better performance, less load)
+    const sortByHttps = (a, b) => {
+      const aHttps = (a.url || '').startsWith('https://') ? 0 : 1;
+      const bHttps = (b.url || '').startsWith('https://') ? 0 : 1;
+      return aHttps - bHttps;
+    };
+
+    const finalMerged = [...exactMatches.sort(sortByHttps), ...relatedMatches.sort(sortByHttps)];
 
     // DISCOVERY LOGIC: Move items already in playlist to the bottom
     const inPlaylistUuids = new Set(playlist.map(p => p.uuid));
