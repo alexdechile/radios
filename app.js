@@ -189,6 +189,7 @@ async function init() {
   document.getElementById('playlist').addEventListener('click', onPlaylistClick);
   document.getElementById('btnExportJSON')?.addEventListener('click', (e) => onToolbarClick(e));
   document.getElementById('btnImportJSON')?.addEventListener('click', (e) => onToolbarClick(e));
+  document.getElementById('btnCopyPlaylist')?.addEventListener('click', copyPlaylistToClipboard);
   document.getElementById('btnHardRefresh')?.addEventListener('click', hardRefresh);
 
   // Deep Linking (Play from URL)
@@ -917,6 +918,29 @@ function exportM3U() {
 function exportJSON() {
   if (!playlist.length) return;
   download(JSON.stringify(playlist, null, 2), 'radios.json', 'application/json');
+}
+
+function copyPlaylistToClipboard() {
+  if (!playlist.length) {
+    const btn = document.getElementById('btnCopyPlaylist');
+    btn.innerHTML = '<i class="fas fa-clipboard"></i>';
+    return;
+  }
+
+  const lines = playlist.map((s, i) => `${i + 1}. ${s.name}${s.bitrate ? ` (${s.bitrate}k)` : ''}\n   ${s.url}`);
+  const text = `🎵 Mi Playlist de Radios (${playlist.length} emisoras)\n\n${lines.join('\n')}`;
+
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('btnCopyPlaylist');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-check" style="color: var(--sage)"></i>';
+    setTimeout(() => btn.innerHTML = orig, 2000);
+  }).catch(() => {
+    const btn = document.getElementById('btnCopyPlaylist');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-times" style="color: #E07070"></i>';
+    setTimeout(() => btn.innerHTML = orig, 2000);
+  });
 }
 
 function importJSON() {
