@@ -642,9 +642,11 @@ function play(url, name, uuid) {
   const displayTime = document.getElementById('radioDisplayTime');
   if (displayTime) displayTime.textContent = '00:00';
 
-  // Change Source
-  audio.crossOrigin = 'anonymous'; // Enable visualizer for CORS-enabled streams
-  audio.src = url;
+  // Proxy HTTP streams to avoid mixed content blocking
+  const finalUrl = url.startsWith('http://') ? `/proxy?url=${encodeURIComponent(url)}` : url;
+
+  audio.crossOrigin = 'anonymous';
+  audio.src = finalUrl;
   audio.load();
 
   // Initialize/Resume Equalizer safely
