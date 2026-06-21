@@ -98,7 +98,10 @@ async function init() {
         document.getElementById('results').innerHTML = '';
         return;
       }
-      debounce = setTimeout(() => search(q), 400);
+      debounce = setTimeout(() => {
+        search(q);
+        saveToHistory(q);
+      }, 400);
     });
 
     input.addEventListener('focus', () => {
