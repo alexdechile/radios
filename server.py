@@ -21,6 +21,13 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
         else:
             self.handle_static()
 
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "*")
+        self.end_headers()
+
     def handle_static(self):
         # Basic static file serving logic
         path = self.path.split("?")[0]
@@ -98,6 +105,7 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
 
         print(f"[PROXY] Fetching: {target_url}", file=sys.stderr)
 
+        # Try urllib first; fall back to raw socket for ICY streams
         try:
             req = urllib.request.Request(
                 target_url,
@@ -109,48 +117,8 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
             )
 
             upstream = urllib.request.urlopen(req, timeout=15)
-
-            ct = upstream.headers.get("Content-Type", "audio/mpeg")
-            status = upstream.status
-            print(
-                f"[PROXY] Status={status} Content-Type={ct} for {target_url}",
-                file=sys.stderr,
-            )
-
-            self.send_response(200)
-            self.send_header("Content-Type", ct)
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
-
-            icy_br = upstream.headers.get("icy-br", "")
-            if icy_br:
-                self.send_header("icy-br", icy_br)
-            icy_name = upstream.headers.get("icy-name", "")
-            if icy_name:
-                self.send_header("icy-name", icy_name)
-
-            self.end_headers()
-
-            bytes_sent = 0
-            while True:
-                chunk = upstream.read(8192)
-                if not chunk:
-                    break
-                try:
-                    self.wfile.write(chunk)
-                    self.wfile.flush()
-                    bytes_sent += len(chunk)
-                except BrokenPipeError:
-                    print(
-                        f"[PROXY] Client disconnected after {bytes_sent} bytes",
-                        file=sys.stderr,
-                    )
-                    break
-
-            print(
-                f"[PROXY] Done: {bytes_sent} bytes sent for {target_url}",
-                file=sys.stderr,
-            )
+            self._proxy_stream(upstream, target_url)
+            return
 
         except urllib.error.HTTPError as e:
             print(
@@ -158,15 +126,153 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
                 file=sys.stderr,
             )
             self.send_error(e.code, str(e))
-        except urllib.error.URLError as e:
-            print(f"[PROXY] URL Error for {target_url}: {e.reason}", file=sys.stderr)
-            self.send_error(502, f"Connection failed: {e.reason}")
+            return
+        except Exception as e:
+            # Fall through to raw socket (handles ICY protocol)
+            print(f"[PROXY] urllib failed, trying raw socket: {e}", file=sys.stderr)
+
+        # Raw socket fallback for ICY / problematic streams
+        try:
+            parsed = urllib.parse.urlparse(target_url)
+            host = parsed.hostname
+            port = parsed.port or (443 if parsed.scheme == "https" else 80)
+            path = parsed.path or "/"
+            if parsed.query:
+                path += "?" + parsed.query
+
+            sock = socket.create_connection((host, port), timeout=15)
+            if parsed.scheme == "https":
+                import ssl
+
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                sock = ctx.wrap_socket(sock, server_hostname=host)
+
+            request = (
+                f"GET {path} HTTP/1.0\r\n"
+                f"Host: {host}\r\n"
+                f"User-Agent: RadiosApp/1.0\r\n"
+                f"Icy-MetaData: 1\r\n"
+                f"Accept: */*\r\n"
+                f"\r\n"
+            )
+            sock.sendall(request.encode())
+
+            # Read status line
+            status_line = b""
+            while not status_line.endswith(b"\r\n"):
+                chunk = sock.recv(1)
+                if not chunk:
+                    break
+                status_line += chunk
+
+            status_str = status_line.decode("utf-8", errors="replace").strip()
+            print(f"[PROXY] Raw socket status: {status_str}", file=sys.stderr)
+
+            # Read headers until blank line
+            headers_raw = b""
+            while True:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                headers_raw += chunk
+                if b"\r\n\r\n" in headers_raw:
+                    break
+
+            header_text = headers_raw.decode("utf-8", errors="replace")
+            headers = {}
+            for line in header_text.split("\r\n"):
+                if ":" in line:
+                    k, v = line.split(":", 1)
+                    headers[k.strip().lower()] = v.strip()
+
+            ct = headers.get("content-type", "audio/mpeg")
+            print(f"[PROXY] Raw socket Content-Type: {ct}", file=sys.stderr)
+
+            self.send_response(200)
+            self.send_header("Content-Type", ct)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            icy_br = headers.get("icy-br", "")
+            if icy_br:
+                self.send_header("icy-br", icy_br)
+            icy_name = headers.get("icy-name", "")
+            if icy_name:
+                self.send_header("icy-name", icy_name)
+            self.end_headers()
+
+            # Body comes after headers (skip past the blank line)
+            body_start = headers_raw.find(b"\r\n\r\n") + 4
+            remaining = headers_raw[body_start:]
+
+            bytes_sent = 0
+            if remaining:
+                try:
+                    self.wfile.write(remaining)
+                    self.wfile.flush()
+                    bytes_sent += len(remaining)
+                except BrokenPipeError:
+                    sock.close()
+                    return
+
+            while True:
+                try:
+                    chunk = sock.recv(8192)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+                    bytes_sent += len(chunk)
+                except (BrokenPipeError, ConnectionError):
+                    break
+
+            print(f"[PROXY] Raw socket done: {bytes_sent} bytes", file=sys.stderr)
+            sock.close()
+
         except socket.timeout:
-            print(f"[PROXY] Timeout for {target_url}", file=sys.stderr)
+            print(f"[PROXY] Raw socket timeout for {target_url}", file=sys.stderr)
             self.send_error(504, "Upstream timed out")
         except Exception as e:
-            print(f"[PROXY] Unexpected error for {target_url}: {e}", file=sys.stderr)
+            print(f"[PROXY] Raw socket error for {target_url}: {e}", file=sys.stderr)
             self.send_error(502, f"Proxy error: {str(e)}")
+
+    def _proxy_stream(self, upstream, target_url):
+        ct = upstream.headers.get("Content-Type", "audio/mpeg")
+        status = upstream.status
+        print(f"[PROXY] urllib: Status={status} Content-Type={ct}", file=sys.stderr)
+
+        self.send_response(200)
+        self.send_header("Content-Type", ct)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+
+        icy_br = upstream.headers.get("icy-br", "")
+        if icy_br:
+            self.send_header("icy-br", icy_br)
+        icy_name = upstream.headers.get("icy-name", "")
+        if icy_name:
+            self.send_header("icy-name", icy_name)
+
+        self.end_headers()
+
+        bytes_sent = 0
+        while True:
+            chunk = upstream.read(8192)
+            if not chunk:
+                break
+            try:
+                self.wfile.write(chunk)
+                self.wfile.flush()
+                bytes_sent += len(chunk)
+            except BrokenPipeError:
+                print(
+                    f"[PROXY] Client disconnected after {bytes_sent} bytes",
+                    file=sys.stderr,
+                )
+                break
+
+        print(f"[PROXY] urllib done: {bytes_sent} bytes", file=sys.stderr)
 
     def perform_web_search(self, query):
         search_query = f"{query} radio en vivo stream"

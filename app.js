@@ -646,9 +646,10 @@ function play(url, name, uuid) {
   const displayTime = document.getElementById('radioDisplayTime');
   if (displayTime) displayTime.textContent = '00:00';
 
-  // Proxy HTTP streams to avoid mixed content blocking
-  const finalUrl = url.startsWith('http://') ? `/proxy?url=${encodeURIComponent(url)}` : url;
-  console.log('[PLAY] finalUrl=%s proxied=%s', finalUrl, url.startsWith('http://') ? 'yes' : 'no');
+  // Proxy all external streams to avoid mixed content, CORS blockers, and enable equalizer
+  const isExternal = url.startsWith('http://') || url.startsWith('https://');
+  const finalUrl = isExternal ? `/proxy?url=${encodeURIComponent(url)}` : url;
+  console.log('[PLAY] finalUrl=%s proxied=%s', finalUrl, isExternal ? 'yes' : 'no');
 
   audio.crossOrigin = 'anonymous';
   audio.src = finalUrl;
