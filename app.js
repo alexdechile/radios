@@ -127,7 +127,7 @@ async function init() {
 
   if (historyDropdown) {
     historyDropdown.addEventListener('click', (e) => {
-      const item = e.target.closest('.winamp-dropdown-item');
+      const item = e.target.closest('.history-item');
       const btnRemove = e.target.closest('.btn-remove-history');
 
       if (btnRemove) {
@@ -227,7 +227,7 @@ function renderHistory(filter = '') {
   }
 
   dropdown.innerHTML = filtered.map(q => `
-    <div class="winamp-dropdown-item" data-q="${escAttr(q)}">
+    <div class="history-item" data-q="${escAttr(q)}">
       <span><i class="fas fa-history mr-2 opacity-50"></i> ${escHtml(q)}</span>
       <button class="btn-remove-history" data-q="${escAttr(q)}" title="Quitar">
         <i class="fas fa-times"></i>
@@ -274,7 +274,7 @@ function initEqualizer() {
     let barHeight;
     let x = 0;
 
-    ctx.strokeStyle = '#D4A017'; // ocre
+    ctx.strokeStyle = '#C9B6D9'; // lavender
     ctx.lineWidth = 2;
     ctx.beginPath();
 
@@ -667,7 +667,7 @@ function play(url, name, uuid) {
 
 async function startMetadataTracker(uuid) {
   const display = document.getElementById('radioDisplay');
-  const kbpsDisplay = document.querySelector('.winamp-kbps');
+  const kbpsDisplay = document.getElementById('plCount');
   const server = await pickServer();
   if (!server) return;
 

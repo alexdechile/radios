@@ -1,141 +1,169 @@
-/* =============================================
-   RADIOS APP — True Winamp Skin
-   Todo integrado en un solo chasis
-   ============================================= */
-
-/* ── CSS Custom Properties ── */
 :root {
-  --crema: #FFF8EC;
-  --grafito: #3B3632;
-  --grafito-luz: #8A8078;
-  --ocre: #D4A017;
-  --anaranjado: #E8572A;
-  --rojo: #9E2A2B;
-  --azul: #1A4B8A;
-  --pistacho: #8BA84D;
-  --winamp-bg: #2B2A29;
-  --winamp-green: #00FF00;
+  --bg-page: #FFF8F0;
+  --bg-card: #FFFFFF;
+  --bg-soft: #FFFDF5;
+  --lavender: #C9B6D9;
+  --lavender-light: #E8DFF0;
+  --pink: #F6C8C8;
+  --pink-light: #FDE8E8;
+  --sage: #A8D5BA;
+  --sage-light: #D8EDE0;
+  --sky: #A8C5D6;
+  --sky-light: #D8E8F0;
+  --peach: #F7DCB1;
+  --peach-light: #FDF0D8;
+  --mint: #B8E0D2;
+  --text-primary: #4A4A4A;
+  --text-secondary: #8A8A8A;
+  --text-light: #B0B0B0;
+  --border: #E8E0D8;
+  --shadow: 0 4px 24px rgba(0,0,0,0.06);
+  --shadow-hover: 0 8px 32px rgba(0,0,0,0.10);
+  --radius: 16px;
+  --radius-sm: 10px;
 }
 
-/* ── Base ── */
 html, body {
   height: 100%;
   margin: 0;
   padding: 0;
-  overflow: hidden; /* No outer scroll */
-  background: var(--crema);
-  font-family: 'Share Tech Mono', monospace;
+  overflow: hidden;
+  background: var(--bg-page);
+  font-family: 'Inter', sans-serif;
+  color: var(--text-primary);
 }
 
-.winamp-container {
+.app-container {
   height: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 10px;
+  padding: 12px;
   box-sizing: border-box;
 }
 
-/* ── Winamp Skin Chassis ── */
-.winamp-skin {
+.app-card {
   width: 100%;
-  max-width: 400px;
-  height: 95vh;
-  background: var(--winamp-bg);
-  border: 3px solid var(--grafito);
-  border-radius: 8px;
+  max-width: 420px;
+  height: 94vh;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
-  box-shadow: 6px 6px 0 var(--grafito);
-  padding: 2px;
+  overflow: hidden;
   position: relative;
 }
 
-/* Title Bar */
-.winamp-title-bar {
-  background: var(--azul);
-  color: white;
+.app-header {
+  background: linear-gradient(135deg, var(--lavender), var(--sky));
+  padding: 12px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 4px 8px;
-  font-size: 0.7rem;
-  font-weight: bold;
-  border-bottom: 2px solid var(--grafito);
-  cursor: default;
 }
 
-.winamp-window-controls {
+.app-header-left {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
+  color: white;
+  font-weight: 600;
+  font-size: 0.95rem;
 }
 
-.winamp-btn-mini {
-  width: 16px;
-  height: 16px;
-  border: 1px solid white;
+.app-header-left i {
+  font-size: 1.1rem;
+}
+
+.app-header-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-header {
+  background: rgba(255,255,255,0.25);
+  border: none;
+  color: white;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.8rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.6rem;
+  transition: background 0.2s;
 }
 
-/* Upper Body */
-.winamp-main-body {
-  padding: 8px;
+.btn-header:hover {
+  background: rgba(255,255,255,0.4);
+}
+
+.player-section {
+  padding: 12px 14px;
+  background: linear-gradient(135deg, var(--bg-soft), #FFFDF5);
+  border-bottom: 1px solid var(--border);
+}
+
+.player-display {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: #333;
-  border-bottom: 2px solid var(--grafito);
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
-.winamp-display-section {
-  display: flex;
-  gap: 10px;
-  background: #000;
-  border: 2px solid var(--grafito);
-  padding: 8px;
-  border-radius: 4px;
+.visualizer-wrap {
+  width: 72px;
+  height: 36px;
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
-.winamp-visualizer {
-  width: 80px;
-  height: 40px;
-  background: #111;
+.equalizer-canvas {
+  width: 100%;
+  height: 100%;
 }
 
-.winamp-info {
+.player-info {
   flex: 1;
   text-align: right;
 }
 
-.winamp-time {
+.player-time {
   font-size: 1.8rem;
-  color: var(--winamp-green);
+  font-weight: 500;
+  color: var(--lavender);
   line-height: 1;
-  text-shadow: 0 0 5px var(--winamp-green);
+  letter-spacing: 1px;
 }
 
-.winamp-kbps {
-  font-size: 0.6rem;
-  color: var(--winamp-green);
-  opacity: 0.7;
-}
-
-.winamp-song-title {
-  background: #000;
-  color: var(--winamp-green);
-  padding: 4px;
-  border: 1px solid var(--grafito);
-  font-size: 0.8rem;
-  overflow: hidden;
-}
-
-/* Internal Search */
-.winamp-internal-search {
+.player-stats {
+  font-size: 0.65rem;
+  color: var(--text-light);
   display: flex;
-  gap: 4px;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.now-playing {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.search-bar {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 .search-wrapper {
@@ -144,269 +172,489 @@ html, body {
   display: flex;
 }
 
-.winamp-internal-search input {
+.search-wrapper input {
   flex: 1;
-  background: #000;
-  border: 2px solid var(--grafito);
-  color: var(--winamp-green);
-  padding: 4px 8px;
-  font-family: 'Courier Prime', monospace;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 8px 12px;
+  font-family: 'Inter', sans-serif;
   font-size: 0.85rem;
   outline: none;
   width: 100%;
+  transition: border-color 0.2s;
 }
 
-.winamp-dropdown {
+.search-wrapper input:focus {
+  border-color: var(--lavender);
+}
+
+.search-history-dropdown {
   position: absolute;
   top: 100%;
   left: 0;
   right: 0;
-  background: #000;
-  border: 2px solid var(--grafito);
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
   border-top: none;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
   z-index: 100;
   max-height: 150px;
   overflow-y: auto;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.08);
 }
 
-.winamp-dropdown-item {
-  padding: 6px 10px;
-  color: var(--winamp-green);
+.history-item {
+  padding: 8px 12px;
+  color: var(--text-primary);
   font-size: 0.8rem;
   cursor: pointer;
-  border-bottom: 1px solid #222;
+  border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-family: 'Courier Prime', monospace;
+  font-family: 'Inter', sans-serif;
+  transition: background 0.15s;
 }
 
-.winamp-dropdown-item:hover {
-  background: #222;
-  color: #fff;
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-item:hover {
+  background: var(--pink-light);
 }
 
 .btn-remove-history {
   background: transparent;
   border: none;
-  color: var(--grafito-luz);
+  color: var(--text-light);
   cursor: pointer;
-  padding: 2px 5px;
+  padding: 4px 6px;
   font-size: 0.7rem;
+  border-radius: 4px;
+  transition: all 0.15s;
 }
 
 .btn-remove-history:hover {
-  color: var(--rojo);
+  color: #E07070;
+  background: rgba(224,112,112,0.1);
 }
 
-.winamp-internal-search button {
-  background: var(--azul);
-  border: 2px solid var(--grafito);
-  color: white;
-  padding: 0 8px;
+.filter-select {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.7rem;
+  padding: 0 6px;
+  outline: none;
+  max-width: 58px;
   cursor: pointer;
 }
 
-.winamp-mini-select {
-  background: #000;
-  border: 2px solid var(--grafito);
-  color: var(--winamp-green);
-  font-family: 'Courier Prime', monospace;
-  font-size: 0.7rem;
-  outline: none;
-  max-width: 60px;
+.btn-deep {
+  background: var(--sky-light);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  width: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+  flex-shrink: 0;
 }
 
-/* Controls */
-.winamp-controls {
-  padding: 10px 8px;
-  background: var(--winamp-bg);
-  border-bottom: 2px solid var(--grafito);
+.btn-deep:hover {
+  background: var(--sky);
+  color: white;
+  border-color: var(--sky);
 }
 
-.winamp-buttons-group {
+.controls-section {
+  padding: 8px 14px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+}
+
+.transport-buttons {
   display: flex;
   justify-content: center;
-  gap: 3px;
-  margin-bottom: 10px;
+  gap: 4px;
+  margin-bottom: 8px;
 }
 
-.winamp-btn {
-  background: #D1D1D1;
-  border: 2px solid var(--grafito);
-  padding: 6px 10px;
+.btn-transport {
+  background: var(--bg-soft);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
   cursor: pointer;
-  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  transition: all 0.2s;
 }
 
-.btn-play-main { background: var(--pistacho); color: white; }
+.btn-transport:hover {
+  background: var(--lavender-light);
+  color: var(--text-primary);
+  border-color: var(--lavender);
+}
 
-.winamp-playlist-tabs {
+.btn-transport.play-main {
+  background: var(--sage-light);
+  color: var(--text-primary);
+  border-color: var(--sage);
+}
+
+.btn-transport.play-main:hover {
+  background: var(--sage);
+  color: white;
+}
+
+.tab-bar {
   display: flex;
-  border: 1px solid #444;
+  gap: 0;
+  background: var(--bg-soft);
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  overflow: hidden;
 }
 
-.winamp-playlist-tabs .tab-btn {
+.tab-btn {
   flex: 1;
-  background: #111;
-  color: #888;
+  background: transparent;
   border: none;
-  padding: 5px;
+  padding: 7px;
   font-size: 0.7rem;
-  font-weight: bold;
+  font-weight: 600;
   cursor: pointer;
+  color: var(--text-light);
+  transition: all 0.2s;
+  font-family: 'Inter', sans-serif;
 }
 
-.winamp-playlist-tabs .tab-btn.active {
-  background: #333;
-  color: var(--winamp-green);
+.tab-btn.active {
+  background: var(--bg-card);
+  color: var(--lavender);
+  box-shadow: inset 0 -2px 0 var(--lavender);
 }
 
-/* Content Area (Internal Scroll) */
-.winamp-content-area {
+.tab-btn:hover:not(.active) {
+  color: var(--text-secondary);
+  background: rgba(0,0,0,0.02);
+}
+
+.content-area {
   flex: 1;
-  background: #000;
-  margin: 5px;
-  border: 2px solid var(--grafito);
   overflow: hidden;
   position: relative;
+  background: var(--bg-soft);
 }
 
 .content-scroll {
   height: 100%;
   overflow-y: auto;
-  padding: 5px;
+  padding: 8px;
 }
 
-/* Station Card (Compact for Winamp) */
+.content-scroll::-webkit-scrollbar { width: 6px; }
+.content-scroll::-webkit-scrollbar-track { background: transparent; }
+.content-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
 .station-card, .pl-item {
-  background: #111;
-  border: 1px solid #333;
-  margin-bottom: 2px;
-  padding: 8px; /* Slightly more padding */
-  min-height: 48px; /* Comfortable touch height */
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  padding: 10px;
+  min-height: 48px;
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #AAA;
+  color: var(--text-primary);
   font-size: 0.85rem;
+  transition: all 0.2s;
 }
 
-.station-card:hover, .station-card.playing {
-  background: #222;
-  color: var(--winamp-green);
-  border-color: var(--winamp-green);
+.station-card:hover {
+  border-color: var(--lavender);
+  box-shadow: var(--shadow-hover);
 }
 
-.station-icon, .station-icon-placeholder {
-  width: 22px; /* Slightly smaller icon to give more room to text/buttons */
-  height: 22px;
-  border-radius: 4px;
+.station-card.playing {
+  border-color: var(--sage);
+  background: var(--sage-light);
+}
+
+.station-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.station-icon-placeholder {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--lavender-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--lavender);
+  font-size: 0.8rem;
+  flex-shrink: 0;
 }
 
 .station-info {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .station-name, .pl-name {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-weight: bold;
-  font-size: 1rem;
-  color: #EEE;
-  font-family: 'Orbitron', sans-serif;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-primary);
 }
 
-.station-meta { display: none; } /* Hide meta for speed/compactness */
+.station-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
 
-.btn-play, .btn-add, .btn-dismiss, .btn-remove, .btn-play-small {
-  background: #333;
-  border: 2px solid var(--grafito);
-  color: #AAA;
-  width: 32px; /* Larger for mobile thumbs */
+.badge {
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.badge-bitrate {
+  background: var(--peach-light);
+  color: #C49040;
+}
+
+.badge-codec {
+  background: var(--sky-light);
+  color: #6090B0;
+}
+
+.badge-country {
+  background: var(--lavender-light);
+  color: #8A7A9A;
+}
+
+.badge-web {
+  background: var(--mint);
+  color: #3A8A6A;
+}
+
+.badge-deep {
+  background: var(--peach-light);
+  color: #C49040;
+}
+
+.tag {
+  font-size: 0.6rem;
+  color: var(--text-light);
+}
+
+.station-actions, .pl-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.btn {
+  background: var(--bg-soft);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  width: 32px;
   height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 0.85rem;
-  border-radius: 6px;
+  font-size: 0.8rem;
+  transition: all 0.2s;
 }
 
-.btn-play:hover, .btn-play-small:hover { color: var(--winamp-green); border-color: var(--winamp-green); }
-.btn-remove:hover { color: var(--rojo); border-color: var(--rojo); }
+.btn:hover {
+  border-color: var(--lavender);
+  color: var(--lavender);
+  background: var(--lavender-light);
+}
 
-/* Footer */
-.winamp-footer {
-  padding: 4px 8px;
+.btn-play:hover, .btn-play-small:hover {
+  border-color: var(--sage);
+  color: var(--sage);
+  background: var(--sage-light);
+}
+
+.btn-add:hover {
+  border-color: var(--sky);
+  color: var(--sky);
+  background: var(--sky-light);
+}
+
+.btn-remove:hover {
+  border-color: var(--pink);
+  color: #E07070;
+  background: var(--pink-light);
+}
+
+.btn-dismiss:hover {
+  border-color: var(--text-light);
+  color: var(--text-light);
+}
+
+.pl-item {
+  cursor: default;
+}
+
+.pl-item.playing {
+  border-color: var(--sage);
+  background: var(--sage-light);
+}
+
+.pl-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-footer {
+  padding: 8px 14px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--winamp-bg);
-  border-top: 1px solid #444;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
 }
 
 .btn-footer {
   background: transparent;
-  border: 1px solid #555;
-  color: #888;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-light);
   font-size: 0.6rem;
-  padding: 2px 6px;
+  font-weight: 600;
+  padding: 4px 10px;
   cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.2s;
 }
 
-.winamp-resize-handle {
-  color: #444;
+.btn-footer:hover {
+  border-color: var(--lavender);
+  color: var(--lavender);
+  background: var(--lavender-light);
+}
+
+.resize-handle {
+  color: var(--border);
   font-size: 0.8rem;
+  user-select: none;
 }
 
 .hidden { display: none !important; }
 
-/* Custom Scrollbar */
-.content-scroll::-webkit-scrollbar { width: 8px; }
-.content-scroll::-webkit-scrollbar-track { background: #000; }
-.content-scroll::-webkit-scrollbar-thumb { background: #333; border: 1px solid #555; }
-
-/* Utilities */
-.winamp-btn-util {
-  background: transparent;
-  border: none;
-  color: white;
-  cursor: pointer;
+.status-msg {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
 }
 
-/* ── Tablet & Large Mobile Optimizations ── */
+.status-msg.error {
+  color: #E07070;
+}
+
+.status-msg.hint {
+  color: var(--text-light);
+  font-size: 0.75rem;
+  padding: 8px;
+}
+
+.status-msg i.fa-spinner {
+  font-size: 1.5rem;
+  margin-bottom: 8px;
+  color: var(--lavender);
+}
+
+.empty-playlist {
+  padding: 30px 20px;
+  text-align: center;
+  color: var(--text-light);
+}
+
+.empty-playlist i {
+  font-size: 2rem;
+  margin-bottom: 10px;
+  color: var(--lavender);
+  display: block;
+}
+
+.search-divider {
+  border: none;
+  border-top: 1.5px solid var(--border);
+  margin: 12px 0;
+}
+
+.web-result {
+  border-left: 3px solid var(--mint);
+}
+
 @media (min-width: 601px) and (max-width: 1024px) {
-  .winamp-skin {
-    max-width: 90% !important;
+  .app-card {
+    max-width: 90%;
     height: 90vh;
   }
 }
 
-
-/* ── Mobile Optimizations ── */
 @media (max-width: 600px) {
-  .winamp-skin {
-    height: 98vh;
+  .app-container {
+    padding: 0;
+  }
+
+  .app-card {
+    height: 100vh;
     max-width: 100%;
     border-radius: 0;
     box-shadow: none;
   }
 
-  .winamp-time {
-    font-size: 2.2rem;
+  .player-display {
+    gap: 10px;
   }
 
-  .winamp-song-title {
-    font-size: 0.95rem;
-    padding: 6px;
+  .player-time {
+    font-size: 2rem;
   }
 
-  /* Search Bar - Make it more stack-friendly */
-  .winamp-internal-search {
+  .now-playing {
+    font-size: 0.85rem;
+    padding: 8px 10px;
+  }
+
+  .search-bar {
     flex-wrap: wrap;
     gap: 6px;
   }
@@ -415,106 +663,102 @@ html, body {
     flex: 1 1 100%;
   }
 
-  .winamp-internal-search input {
+  .search-wrapper input {
     padding: 10px;
     font-size: 1rem;
   }
 
-  .winamp-mini-select {
+  .filter-select {
     flex: 1;
     max-width: none;
     height: 38px;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
   }
 
-  .winamp-internal-search button#btnDeepSearch {
+  .btn-deep {
     flex: 0 0 44px;
     height: 38px;
-  }
-
-  /* Controls */
-  .winamp-btn {
-    padding: 12px 15px;
     font-size: 1rem;
   }
 
-  .winamp-playlist-tabs .tab-btn {
-    padding: 10px;
-    font-size: 0.85rem;
+  .btn-transport {
+    padding: 10px 14px;
+    font-size: 1rem;
   }
 
-  /* Station Cards */
+  .tab-btn {
+    padding: 9px;
+    font-size: 0.75rem;
+  }
+
   .station-card, .pl-item {
     padding: 12px;
-    min-height: 60px;
+    min-height: 56px;
   }
 
   .station-name, .pl-name {
-    font-size: 1.1rem;
-  }
-
-  .btn-play, .btn-add, .btn-dismiss, .btn-remove, .btn-play-small {
-    width: 44px;
-    height: 44px;
-    font-size: 1.1rem;
-  }
-
-  /* Dropdown History */
-  .winamp-dropdown-item {
-    padding: 12px;
     font-size: 1rem;
   }
 
-  .btn-remove-history {
-    padding: 8px;
+  .btn {
+    width: 40px;
+    height: 40px;
+    font-size: 0.95rem;
+  }
+
+  .history-item {
+    padding: 10px 12px;
     font-size: 0.9rem;
+  }
+
+  .btn-remove-history {
+    padding: 6px 8px;
+    font-size: 0.8rem;
   }
 }
 
-/* ── Very Small/Short Screen Optimizations (e.g. iPhone SE) ── */
 @media (max-height: 670px) and (max-width: 600px) {
-  .winamp-main-body {
-    padding: 4px;
-    gap: 4px;
-  }
-  
-  .winamp-display-section {
-    padding: 4px;
-  }
-  
-  .winamp-visualizer {
-    width: 60px;
-    height: 30px;
-  }
-  
-  .winamp-time {
-    font-size: 1.6rem;
-  }
-  
-  .winamp-song-title {
-    padding: 2px;
-    font-size: 0.8rem;
-  }
-  
-  .winamp-controls {
-    padding: 5px;
-  }
-  
-  .winamp-buttons-group {
-    margin-bottom: 5px;
-  }
-  
-  .winamp-btn {
+  .player-section {
     padding: 8px 10px;
   }
-  
+
+  .player-display {
+    margin-bottom: 4px;
+  }
+
+  .visualizer-wrap {
+    width: 56px;
+    height: 28px;
+  }
+
+  .player-time {
+    font-size: 1.5rem;
+  }
+
+  .now-playing {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+  }
+
+  .controls-section {
+    padding: 4px 10px;
+  }
+
+  .transport-buttons {
+    margin-bottom: 4px;
+  }
+
+  .btn-transport {
+    padding: 6px 10px;
+  }
+
   .station-card, .pl-item {
     padding: 8px;
-    min-height: 50px;
+    min-height: 44px;
   }
-  
-  .btn-play, .btn-add, .btn-dismiss, .btn-remove, .btn-play-small {
-    width: 40px;
-    height: 40px;
+
+  .btn {
+    width: 36px;
+    height: 36px;
   }
 }
