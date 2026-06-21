@@ -6,6 +6,7 @@ import json
 import re
 import sys
 import os
+import socket
 from scrapling.fetchers import Fetcher
 
 PORT = 8000
@@ -95,6 +96,8 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
             self.send_json({"error": "Missing url parameter"}, 400)
             return
 
+        print(f"[PROXY] Fetching: {target_url}", file=sys.stderr)
+
         try:
             req = urllib.request.Request(
                 target_url,
@@ -108,6 +111,11 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
             upstream = urllib.request.urlopen(req, timeout=15)
 
             ct = upstream.headers.get("Content-Type", "audio/mpeg")
+            status = upstream.status
+            print(
+                f"[PROXY] Status={status} Content-Type={ct} for {target_url}",
+                file=sys.stderr,
+            )
 
             self.send_response(200)
             self.send_header("Content-Type", ct)
@@ -123,6 +131,7 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
 
             self.end_headers()
 
+            bytes_sent = 0
             while True:
                 chunk = upstream.read(8192)
                 if not chunk:
@@ -130,12 +139,33 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
                 try:
                     self.wfile.write(chunk)
                     self.wfile.flush()
+                    bytes_sent += len(chunk)
                 except BrokenPipeError:
+                    print(
+                        f"[PROXY] Client disconnected after {bytes_sent} bytes",
+                        file=sys.stderr,
+                    )
                     break
 
+            print(
+                f"[PROXY] Done: {bytes_sent} bytes sent for {target_url}",
+                file=sys.stderr,
+            )
+
         except urllib.error.HTTPError as e:
+            print(
+                f"[PROXY] HTTP Error {e.code} for {target_url}: {e.reason}",
+                file=sys.stderr,
+            )
             self.send_error(e.code, str(e))
+        except urllib.error.URLError as e:
+            print(f"[PROXY] URL Error for {target_url}: {e.reason}", file=sys.stderr)
+            self.send_error(502, f"Connection failed: {e.reason}")
+        except socket.timeout:
+            print(f"[PROXY] Timeout for {target_url}", file=sys.stderr)
+            self.send_error(504, "Upstream timed out")
         except Exception as e:
+            print(f"[PROXY] Unexpected error for {target_url}: {e}", file=sys.stderr)
             self.send_error(502, f"Proxy error: {str(e)}")
 
     def perform_web_search(self, query):

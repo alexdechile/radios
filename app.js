@@ -628,6 +628,7 @@ function renderResults(stations, isAppend = false) {
 /* ── Play Radio ── */
 function play(url, name, uuid) {
   const audio = document.getElementById('audioPlayer');
+  console.log('[PLAY] name=%s uuid=%s url=%s', name, uuid, url);
 
   // Clear previous metadata interval
   if (metadataInterval) clearInterval(metadataInterval);
@@ -647,10 +648,20 @@ function play(url, name, uuid) {
 
   // Proxy HTTP streams to avoid mixed content blocking
   const finalUrl = url.startsWith('http://') ? `/proxy?url=${encodeURIComponent(url)}` : url;
+  console.log('[PLAY] finalUrl=%s proxied=%s', finalUrl, url.startsWith('http://') ? 'yes' : 'no');
 
   audio.crossOrigin = 'anonymous';
   audio.src = finalUrl;
   audio.load();
+
+  audio.addEventListener('error', function onPlayError() {
+    console.error('[PLAY] audio error code=%d message=%s', this.error ? this.error.code : '?', this.error ? this.error.message : 'unknown');
+    audio.removeEventListener('error', onPlayError);
+  }, { once: true });
+
+  audio.addEventListener('canplay', () => {
+    console.log('[PLAY] canplay event fired for %s', name);
+  }, { once: true });
 
   // Initialize/Resume Equalizer safely
   try {
@@ -660,9 +671,11 @@ function play(url, name, uuid) {
   }
 
   // Play
-  player.play().catch((err) => {
-    console.error('Playback error:', err);
-    brand.textContent = '⚠️ Error de conexión';
+  player.play().then(() => {
+    console.log('[PLAY] playback started for %s', name);
+  }).catch((err) => {
+    console.error('[PLAY] playback error:', err);
+    display.textContent = '⚠️ Error de conexión';
   });
 
   // Start metadata tracking if we have a valid UUID
