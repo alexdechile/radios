@@ -648,7 +648,7 @@ function play(url, name, uuid) {
 
   // Proxy all external streams to avoid mixed content, CORS blockers, and enable equalizer
   const isExternal = url.startsWith('http://') || url.startsWith('https://');
-  const finalUrl = isExternal ? `/proxy?url=${encodeURIComponent(url)}` : url;
+  const finalUrl = isExternal ? `proxy?url=${encodeURIComponent(url)}` : url;
   console.log('[PLAY] finalUrl=%s proxied=%s', finalUrl, isExternal ? 'yes' : 'no');
 
   audio.crossOrigin = 'anonymous';
