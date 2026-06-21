@@ -6,7 +6,8 @@
 const API_SERVERS = ['de1', 'de2', 'nl1', 'at1'];
 const UA = 'RadiosSketchApp/1.0';
 const STORE_KEY = 'radios_playlist';
-const APP_VERSION = '1.1.0';
+const HISTORY_KEY = 'radios_search_history';
+const APP_VERSION = '1.1.3';
 
 // Radios patrocinadas que SIEMPRE aparecen al iniciar
 const SPONSORED_STATIONS = [
@@ -32,6 +33,7 @@ const SPONSORED_STATIONS = [
 
 let player = null;
 let playlist = [];
+let searchHistory = [];
 let deepDb = [];
 let cachedServer = null;
 let metadataInterval = null;
@@ -40,7 +42,7 @@ let analyser = null;
 
 /* ── Init ── */
 async function init() {
-  checkUpdate();
+  await checkUpdate();
 
   // Service Worker for PWA
   if ('serviceWorker' in navigator) {
@@ -48,6 +50,7 @@ async function init() {
   }
 
   playlist = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+  searchHistory = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
 
   // Inyectar patrocinadas (asegurando que no se repitan)
   SPONSORED_STATIONS.forEach(sponsored => {
@@ -83,25 +86,67 @@ async function init() {
   renderPlaylist();
 
   const input = document.getElementById('searchInput');
+  const historyDropdown = document.getElementById('searchHistory');
   let debounce;
 
-  input.addEventListener('input', () => {
-    clearTimeout(debounce);
-    const q = input.value.trim();
-    if (q.length < 2) {
-      document.getElementById('results').innerHTML = '';
-      return;
-    }
-    debounce = setTimeout(() => search(q), 400);
-  });
-
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
+  if (input) {
+    input.addEventListener('input', () => {
       clearTimeout(debounce);
       const q = input.value.trim();
-      if (q.length >= 2) search(q);
+      renderHistory(q);
+      if (q.length < 2) {
+        document.getElementById('results').innerHTML = '';
+        return;
+      }
+      debounce = setTimeout(() => search(q), 400);
+    });
+
+    input.addEventListener('focus', () => {
+      renderHistory(input.value.trim());
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        clearTimeout(debounce);
+        const q = input.value.trim();
+        if (q.length >= 2) {
+          search(q);
+          saveToHistory(q);
+          if (historyDropdown) historyDropdown.classList.add('hidden');
+        }
+      }
+    });
+  }
+
+  // Hide history when clicking outside
+  document.addEventListener('click', (e) => {
+    if (historyDropdown && !e.target.closest('.search-wrapper')) {
+      historyDropdown.classList.add('hidden');
     }
   });
+
+  if (historyDropdown) {
+    historyDropdown.addEventListener('click', (e) => {
+      const item = e.target.closest('.winamp-dropdown-item');
+      const btnRemove = e.target.closest('.btn-remove-history');
+
+      if (btnRemove) {
+        e.stopPropagation();
+        const qToRemove = btnRemove.dataset.q;
+        removeFromHistory(qToRemove);
+        renderHistory(input ? input.value.trim() : '');
+        return;
+      }
+
+      if (item && input) {
+        const q = item.dataset.q;
+        input.value = q;
+        search(q);
+        saveToHistory(q); // Move to top
+        historyDropdown.classList.add('hidden');
+      }
+    });
+  }
 
   // Filters trigger re-search
   document.getElementById('filterBitrate')?.addEventListener('change', triggerSearch);
@@ -142,7 +187,9 @@ async function init() {
   // Event delegation
   document.getElementById('results').addEventListener('click', onResultsClick);
   document.getElementById('playlist').addEventListener('click', onPlaylistClick);
-  document.getElementById('playlistToolbar').addEventListener('click', onToolbarClick);
+  document.getElementById('btnExportJSON')?.addEventListener('click', (e) => onToolbarClick(e));
+  document.getElementById('btnImportJSON')?.addEventListener('click', (e) => onToolbarClick(e));
+  document.getElementById('btnHardRefresh')?.addEventListener('click', hardRefresh);
 
   // Deep Linking (Play from URL)
   const params = new URLSearchParams(window.location.search);
@@ -151,6 +198,44 @@ async function init() {
   if (playUrl && playName) {
     setTimeout(() => play(playUrl, playName), 1000);
   }
+}
+
+/* ── History Logic ── */
+function saveToHistory(query) {
+  if (!query) return;
+  // Remove if already exists to move to top
+  searchHistory = searchHistory.filter(q => q.toLowerCase() !== query.toLowerCase());
+  searchHistory.unshift(query);
+  searchHistory = searchHistory.slice(0, 10); // Limit to 10
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(searchHistory));
+}
+
+function removeFromHistory(query) {
+  searchHistory = searchHistory.filter(q => q !== query);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(searchHistory));
+}
+
+function renderHistory(filter = '') {
+  const dropdown = document.getElementById('searchHistory');
+  const filtered = filter 
+    ? searchHistory.filter(q => q.toLowerCase().includes(filter.toLowerCase()))
+    : searchHistory;
+
+  if (filtered.length === 0) {
+    dropdown.classList.add('hidden');
+    return;
+  }
+
+  dropdown.innerHTML = filtered.map(q => `
+    <div class="winamp-dropdown-item" data-q="${escAttr(q)}">
+      <span><i class="fas fa-history mr-2 opacity-50"></i> ${escHtml(q)}</span>
+      <button class="btn-remove-history" data-q="${escAttr(q)}" title="Quitar">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  `).join('');
+  
+  dropdown.classList.remove('hidden');
 }
 
 function initEqualizer() {

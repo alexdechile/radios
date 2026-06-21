@@ -57,7 +57,10 @@
 
         <!-- Integrated Search Bar (Inside Player) -->
         <div class="winamp-internal-search">
-          <input type="text" id="searchInput" placeholder="Search..." autocomplete="off">
+          <div class="search-wrapper">
+            <input type="text" id="searchInput" placeholder="Search..." autocomplete="off">
+            <div id="searchHistory" class="winamp-dropdown hidden"></div>
+          </div>
           <select id="filterBitrate" class="winamp-mini-select" title="Bitrate">
             <option value="0">Qual</option>
             <option value="128">128k</option>

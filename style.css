@@ -138,6 +138,12 @@ html, body {
   gap: 4px;
 }
 
+.search-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+}
+
 .winamp-internal-search input {
   flex: 1;
   background: #000;
@@ -147,6 +153,51 @@ html, body {
   font-family: 'Courier Prime', monospace;
   font-size: 0.85rem;
   outline: none;
+  width: 100%;
+}
+
+.winamp-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #000;
+  border: 2px solid var(--grafito);
+  border-top: none;
+  z-index: 100;
+  max-height: 150px;
+  overflow-y: auto;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
+
+.winamp-dropdown-item {
+  padding: 6px 10px;
+  color: var(--winamp-green);
+  font-size: 0.8rem;
+  cursor: pointer;
+  border-bottom: 1px solid #222;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'Courier Prime', monospace;
+}
+
+.winamp-dropdown-item:hover {
+  background: #222;
+  color: #fff;
+}
+
+.btn-remove-history {
+  background: transparent;
+  border: none;
+  color: var(--grafito-luz);
+  cursor: pointer;
+  padding: 2px 5px;
+  font-size: 0.7rem;
+}
+
+.btn-remove-history:hover {
+  color: var(--rojo);
 }
 
 .winamp-internal-search button {
@@ -325,4 +376,145 @@ html, body {
   border: none;
   color: white;
   cursor: pointer;
+}
+
+/* ── Tablet & Large Mobile Optimizations ── */
+@media (min-width: 601px) and (max-width: 1024px) {
+  .winamp-skin {
+    max-width: 90% !important;
+    height: 90vh;
+  }
+}
+
+
+/* ── Mobile Optimizations ── */
+@media (max-width: 600px) {
+  .winamp-skin {
+    height: 98vh;
+    max-width: 100%;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .winamp-time {
+    font-size: 2.2rem;
+  }
+
+  .winamp-song-title {
+    font-size: 0.95rem;
+    padding: 6px;
+  }
+
+  /* Search Bar - Make it more stack-friendly */
+  .winamp-internal-search {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .search-wrapper {
+    flex: 1 1 100%;
+  }
+
+  .winamp-internal-search input {
+    padding: 10px;
+    font-size: 1rem;
+  }
+
+  .winamp-mini-select {
+    flex: 1;
+    max-width: none;
+    height: 38px;
+    font-size: 0.85rem;
+  }
+
+  .winamp-internal-search button#btnDeepSearch {
+    flex: 0 0 44px;
+    height: 38px;
+  }
+
+  /* Controls */
+  .winamp-btn {
+    padding: 12px 15px;
+    font-size: 1rem;
+  }
+
+  .winamp-playlist-tabs .tab-btn {
+    padding: 10px;
+    font-size: 0.85rem;
+  }
+
+  /* Station Cards */
+  .station-card, .pl-item {
+    padding: 12px;
+    min-height: 60px;
+  }
+
+  .station-name, .pl-name {
+    font-size: 1.1rem;
+  }
+
+  .btn-play, .btn-add, .btn-dismiss, .btn-remove, .btn-play-small {
+    width: 44px;
+    height: 44px;
+    font-size: 1.1rem;
+  }
+
+  /* Dropdown History */
+  .winamp-dropdown-item {
+    padding: 12px;
+    font-size: 1rem;
+  }
+
+  .btn-remove-history {
+    padding: 8px;
+    font-size: 0.9rem;
+  }
+}
+
+/* ── Very Small/Short Screen Optimizations (e.g. iPhone SE) ── */
+@media (max-height: 670px) and (max-width: 600px) {
+  .winamp-main-body {
+    padding: 4px;
+    gap: 4px;
+  }
+  
+  .winamp-display-section {
+    padding: 4px;
+  }
+  
+  .winamp-visualizer {
+    width: 60px;
+    height: 30px;
+  }
+  
+  .winamp-time {
+    font-size: 1.6rem;
+  }
+  
+  .winamp-song-title {
+    padding: 2px;
+    font-size: 0.8rem;
+  }
+  
+  .winamp-controls {
+    padding: 5px;
+  }
+  
+  .winamp-buttons-group {
+    margin-bottom: 5px;
+  }
+  
+  .winamp-btn {
+    padding: 8px 10px;
+  }
+  
+  .station-card, .pl-item {
+    padding: 8px;
+    min-height: 50px;
+  }
+  
+  .btn-play, .btn-add, .btn-dismiss, .btn-remove, .btn-play-small {
+    width: 40px;
+    height: 40px;
+  }
 }
