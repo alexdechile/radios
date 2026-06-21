@@ -653,12 +653,13 @@ function play(url, name, uuid) {
   const displayTime = document.getElementById('radioDisplayTime');
   if (displayTime) displayTime.textContent = '00:00';
 
-  // Proxy all external streams to avoid mixed content, CORS blockers, and enable equalizer
-  const isExternal = url.startsWith('http://') || url.startsWith('https://');
-  const finalUrl = isExternal ? `proxy?url=${encodeURIComponent(url)}` : url;
-  console.log('[PLAY] finalUrl=%s proxied=%s', finalUrl, isExternal ? 'yes' : 'no');
+  // Only proxy HTTP streams (mixed content blocked by browser).
+  // HTTPS streams play directly; crossOrigin omitted to avoid CORS issues.
+  const isHttp = url.startsWith('http://');
+  const finalUrl = isHttp ? `proxy?url=${encodeURIComponent(url)}` : url;
+  console.log('[PLAY] finalUrl=%s proxied=%s', finalUrl, isHttp ? 'yes' : 'no');
 
-  audio.crossOrigin = 'anonymous';
+  audio.crossOrigin = isHttp ? 'anonymous' : '';
   audio.src = finalUrl;
   audio.load();
 

@@ -195,7 +195,6 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
             self.send_header("X-Accel-Buffering", "no")
-            self.send_header("Transfer-Encoding", "identity")
             icy_br = headers.get("icy-br", "")
             if icy_br:
                 self.send_header("icy-br", icy_br)
@@ -249,7 +248,6 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.send_header("X-Accel-Buffering", "no")
-        self.send_header("Transfer-Encoding", "identity")
 
         icy_br = upstream.headers.get("icy-br", "")
         if icy_br:
