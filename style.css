@@ -28,7 +28,7 @@ html, body {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background: var(--bg-page);
+  background: linear-gradient(135deg, #FFF8F0, #E8DFF0, #D8EDE0, #FDE8E8);
   font-family: 'Inter', sans-serif;
   color: var(--text-primary);
 }
@@ -624,7 +624,7 @@ html, body {
 
 @media (min-width: 1025px) {
   .app-card {
-    max-width: 580px;
+    max-width: 80%;
   }
 }
 
