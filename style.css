@@ -44,7 +44,7 @@ html, body {
 
 .app-card {
   width: 100%;
-  max-width: 420px;
+  max-width: 520px;
   height: 94vh;
   background: var(--bg-card);
   border-radius: var(--radius);
@@ -620,6 +620,12 @@ html, body {
 
 .web-result {
   border-left: 3px solid var(--mint);
+}
+
+@media (min-width: 1025px) {
+  .app-card {
+    max-width: 580px;
+  }
 }
 
 @media (min-width: 601px) and (max-width: 1024px) {

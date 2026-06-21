@@ -190,6 +190,7 @@ async function init() {
   // Event delegation
   document.getElementById('results').addEventListener('click', onResultsClick);
   document.getElementById('playlist').addEventListener('click', onPlaylistClick);
+  document.getElementById('btnExportM3U')?.addEventListener('click', (e) => onToolbarClick(e));
   document.getElementById('btnExportJSON')?.addEventListener('click', (e) => onToolbarClick(e));
   document.getElementById('btnImportJSON')?.addEventListener('click', (e) => onToolbarClick(e));
   document.getElementById('btnCopyPlaylist')?.addEventListener('click', copyPlaylistToClipboard);
