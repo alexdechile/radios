@@ -37,8 +37,15 @@
             <canvas id="equalizer" class="equalizer-canvas"></canvas>
           </div>
           <div class="player-info">
-            <div class="player-time" id="radioDisplayTime">00:00</div>
+            <div class="player-time-row">
+              <button class="btn-timer-toggle" id="btnTimerToggle" title="Temporizador / Despertador">
+                <i class="far fa-clock"></i>
+              </button>
+              <div class="player-time" id="radioDisplayTime">00:00</div>
+            </div>
             <div class="player-stats">
+              <span id="alarmIndicator" class="timer-indicator-badge alarm-active hidden"></span>
+              <span id="timerIndicator" class="timer-indicator-badge hidden"></span>
               <span id="plCount">0 radios</span>
               <span>44 kHz</span>
             </div>
@@ -86,6 +93,10 @@
           <div id="results" class="results-list"></div>
         </div>
         <div id="playlistSection" class="content-scroll hidden">
+          <div class="pl-toolbar">
+            <button class="btn-pl-action" id="btnPlayAll" title="Reproducir todas"><i class="fas fa-play"></i> Todo</button>
+            <button class="btn-pl-action" id="btnShuffle" title="Aleatorio"><i class="fas fa-shuffle"></i></button>
+          </div>
           <div id="playlist" class="playlist-list"></div>
         </div>
       </div>
@@ -93,6 +104,7 @@
       <div class="app-footer">
         <div class="app-footer-btns">
           <button class="btn-footer" id="btnExportM3U" title="Exportar M3U">M3U</button>
+          <button class="btn-footer" id="btnImportM3U" title="Importar M3U">LOAD M3U</button>
           <button class="btn-footer" id="btnExportJSON" title="Guardar JSON">SAVE</button>
           <button class="btn-footer" id="btnImportJSON" title="Cargar JSON">LOAD</button>
           <button class="btn-footer" id="btnCopyPlaylist" title="Copiar playlist"><i class="fas fa-clipboard"></i></button>
@@ -102,6 +114,59 @@
 
       <div class="radio-player hidden">
         <audio id="audioPlayer" playsinline></audio>
+      </div>
+
+      <!-- Modal de Temporizador / Despertador -->
+      <div id="timerModal" class="timer-modal">
+        <div class="timer-modal-content">
+          <div class="timer-modal-header">
+            <h3><i class="fas fa-clock"></i> Temporizador y Alarma</h3>
+            <button class="btn-close-modal" id="btnCloseTimerModal">&times;</button>
+          </div>
+          
+          <div class="timer-modal-body">
+            <!-- Sección Temporizador de Apagado -->
+            <div class="timer-section-group">
+              <h4><i class="fas fa-moon"></i> Temporizador de Apagado (Sleep)</h4>
+              <p class="section-desc">Detiene la reproducción automáticamente tras transcurrir el tiempo seleccionado.</p>
+              <div class="sleep-presets">
+                <button class="btn-preset" data-minutes="15">15m</button>
+                <button class="btn-preset" data-minutes="30">30m</button>
+                <button class="btn-preset" data-minutes="45">45m</button>
+                <button class="btn-preset" data-minutes="60">60m</button>
+                <button class="btn-preset" id="btnCustomSleep">Otro</button>
+              </div>
+              <div class="custom-sleep-input-wrap hidden" id="customSleepInputWrap">
+                <input type="number" id="inputCustomSleep" placeholder="Minutos" min="1" max="1440">
+                <button class="btn-apply-custom" id="btnApplyCustomSleep">Aplicar</button>
+              </div>
+              <div class="timer-status" id="sleepTimerStatus">
+                <span>Apagado automático desactivado.</span>
+              </div>
+            </div>
+            
+            <hr class="modal-divider">
+            
+            <!-- Sección Despertador (Hora de Encendido) -->
+            <div class="timer-section-group">
+              <h4><i class="fas fa-bell"></i> Despertador (Hora de Encendido)</h4>
+              <p class="section-desc">Sintoniza e inicia la radio elegida a la hora programada.</p>
+              <div class="alarm-controls">
+                <input type="time" id="inputAlarmTime" class="alarm-time-input">
+                <button class="btn-alarm-toggle" id="btnToggleAlarm">Activar</button>
+              </div>
+              <div class="alarm-station-select">
+                <label for="selectAlarmStation">Emisora a sintonizar:</label>
+                <select id="selectAlarmStation" class="alarm-select">
+                  <option value="current">Radio actual / sintonizada</option>
+                </select>
+              </div>
+              <div class="timer-status" id="alarmStatus">
+                <span>Alarma desactivada.</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </main>

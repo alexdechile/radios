@@ -1,6 +1,9 @@
 # Radios App - DonAlex Homelab
 
 ## Último Realizado
+- [x] Implementación de temporizador de apagado automático (Sleep Timer) con presets de 15, 30, 45, 60 minutos y personalizado.
+- [x] Implementación de despertador / alarma programable con selección de estación de radio de la playlist.
+- [x] Integración de badges de estado y botón de reloj cerca del contador de tiempo.
 - [x] Restauración y reparación del servicio `radios-app.service` del Homelab, apuntando al directorio `/home/alexdechile/proyectos/radios` con el entorno de Python y su servidor `server.py`.
 - [x] Solución al conflicto de puertos con `radios-auto` (que se movió al puerto local 8005 y se desvinculó de systemd del Homelab).
 - [x] Creación de este archivo de documentación maestra (`alex.md`).

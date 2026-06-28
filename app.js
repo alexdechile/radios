@@ -7,7 +7,7 @@ const API_SERVERS = ['de1', 'de2', 'nl1', 'at1'];
 const UA = 'RadiosSketchApp/1.0';
 const STORE_KEY = 'radios_playlist';
 const HISTORY_KEY = 'radios_search_history';
-const APP_VERSION = '1.1.3';
+const APP_VERSION = '1.3.1';
 
 // Radios patrocinadas que SIEMPRE aparecen al iniciar
 const SPONSORED_STATIONS = [
@@ -39,6 +39,21 @@ let cachedServer = null;
 let metadataInterval = null;
 let audioCtx = null;
 let analyser = null;
+
+// Timer & Alarm state
+let sleepTimeTarget = null; // timestamp when sleep timer triggers
+let alarmTime = localStorage.getItem('radios_alarm_time') || '';
+let alarmEnabled = localStorage.getItem('radios_alarm_enabled') === 'true';
+let alarmStation = localStorage.getItem('radios_alarm_station') || 'current';
+let lastAlarmTriggeredDate = '';
+let alarmCheckerInterval = null;
+
+// Playlist navigation state
+let plFilterText = '';
+let plCurrentIndex = -1;
+let plShuffled = false;
+let plShuffleOrder = [];
+let plDragSrcIndex = -1;
 
 /* ── Init ── */
 async function init() {
@@ -186,6 +201,11 @@ async function init() {
     const marquee = document.getElementById('radioDisplay');
     if (marquee) marquee.textContent = 'Parado';
   });
+  document.getElementById('btnPrev')?.addEventListener('click', playPrev);
+  document.getElementById('btnNext')?.addEventListener('click', playNext);
+
+  // Auto-advance on stream end
+  player.on('ended', playNext);
 
   // Event delegation
   document.getElementById('results').addEventListener('click', onResultsClick);
@@ -193,8 +213,16 @@ async function init() {
   document.getElementById('btnExportM3U')?.addEventListener('click', (e) => onToolbarClick(e));
   document.getElementById('btnExportJSON')?.addEventListener('click', (e) => onToolbarClick(e));
   document.getElementById('btnImportJSON')?.addEventListener('click', (e) => onToolbarClick(e));
+  document.getElementById('btnImportM3U')?.addEventListener('click', (e) => onToolbarClick(e));
   document.getElementById('btnCopyPlaylist')?.addEventListener('click', copyPlaylistToClipboard);
   document.getElementById('btnHardRefresh')?.addEventListener('click', hardRefresh);
+
+  // Playlist toolbar
+  document.getElementById('plSearch')?.addEventListener('input', onPlSearch);
+  document.getElementById('btnPlayAll')?.addEventListener('click', playlistPlayAll);
+  document.getElementById('btnShuffle')?.addEventListener('click', playlistShuffle);
+
+  // Drag events bound per-item in renderPlaylist()
 
   // Deep Linking (Play from URL)
   const params = new URLSearchParams(window.location.search);
@@ -203,6 +231,9 @@ async function init() {
   if (playUrl && playName) {
     setTimeout(() => play(playUrl, playName), 1000);
   }
+
+  // Init Timer & Alarm
+  initTimerAndAlarm();
 }
 
 /* ── History Logic ── */
@@ -585,6 +616,11 @@ function renderResults(stations, isAppend = false) {
     const uuid = s.stationuuid || s.uuid || '';
     const country = s.country || '';
     const bitrate = s.bitrate || '';
+    const codec = s.codec || '';
+    const homepage = s.homepage || '';
+    const language = s.language || '';
+    const state = s.state || '';
+    const clickcount = s.clickcount || '';
     const inPl = playlist.some((p) => p.uuid === uuid);
 
     return `
@@ -596,6 +632,11 @@ function renderResults(stations, isAppend = false) {
         data-favicon="${escAttr(favicon)}"
         data-country="${escAttr(country)}"
         data-bitrate="${escAttr(bitrate)}"
+        data-codec="${escAttr(codec)}"
+        data-homepage="${escAttr(homepage)}"
+        data-language="${escAttr(language)}"
+        data-state="${escAttr(state)}"
+        data-clickcount="${escAttr(clickcount)}"
       >
         <div class="station-info">
           ${favicon
@@ -767,6 +808,11 @@ function onResultsClick(e) {
       tags: card.dataset.tags || '',
       country: card.dataset.country || '',
       bitrate: card.dataset.bitrate || '',
+      codec: card.dataset.codec || '',
+      homepage: card.dataset.homepage || '',
+      language: card.dataset.language || '',
+      state: card.dataset.state || '',
+      clickcount: card.dataset.clickcount || '',
     });
   }
 
@@ -840,6 +886,16 @@ function updateResultAddButton(uuid, added) {
   });
 }
 
+function getFilteredPlaylist() {
+  if (!plFilterText) return playlist;
+  const q = plFilterText.toLowerCase();
+  return playlist.filter(s =>
+    (s.name || '').toLowerCase().includes(q) ||
+    (s.tags || '').toLowerCase().includes(q) ||
+    (s.country || '').toLowerCase().includes(q)
+  );
+}
+
 function renderPlaylist() {
   const container = document.getElementById('playlist');
   const count = document.getElementById('plCount');
@@ -853,21 +909,174 @@ function renderPlaylist() {
     return;
   }
 
-  container.innerHTML = playlist.map((s) => {
-    const uuid = s.uuid || s.stationuuid || '';
-    return `
-      <div class="pl-item" data-url="${escAttr(s.url)}" data-uuid="${escAttr(uuid)}" data-name="${escAttr(s.name)}">
+  const filtered = getFilteredPlaylist();
+
+  // Group by first tag
+  const groups = {};
+  filtered.forEach(s => {
+    const genre = (s.tags || '').split(',')[0].trim() || 'Sin género';
+    if (!groups[genre]) groups[genre] = [];
+    groups[genre].push(s);
+  });
+
+  let html = '';
+
+  // PlSearch input
+  html += `<div class="pl-search-wrap">
+    <input type="text" id="plSearch" class="pl-search" placeholder="Filtrar en playlist..." value="${escAttr(plFilterText)}" autocomplete="off">
+  </div>`;
+
+  const sortedGenres = Object.keys(groups).sort();
+  sortedGenres.forEach(genre => {
+    const items = groups[genre];
+    html += `<div class="pl-group">
+      <div class="pl-group-header">
+        <span class="pl-group-name">${escHtml(genre)}</span>
+        <span class="pl-group-count">${items.length}</span>
+      </div>`;
+
+    items.forEach(s => {
+      const uuid = s.uuid || s.stationuuid || '';
+      const isPlaying = uuid === document.querySelector('.pl-item.playing')?.dataset.uuid;
+      html += `
+      <div class="pl-item ${isPlaying ? 'playing' : ''}" draggable="true"
+        data-url="${escAttr(s.url)}" 
+        data-uuid="${escAttr(uuid)}" 
+        data-name="${escAttr(s.name)}"
+        data-pl-idx="${playlist.indexOf(s)}">
+        <div class="pl-drag-handle"><i class="fas fa-grip-lines"></i></div>
+        ${s.favicon
+          ? `<img src="${escAttr(s.favicon)}" class="pl-favicon" alt="" loading="lazy" onerror="this.style.display='none'">`
+          : `<div class="pl-favicon-placeholder"><i class="fas fa-radio"></i></div>`
+        }
         <div class="pl-info">
           <span class="pl-name">${escHtml(s.name || 'Sin nombre')}</span>
-          ${s.bitrate ? `<span class="badge badge-bitrate">${s.bitrate}k</span>` : ''}
+          <div class="pl-meta">
+            ${s.bitrate ? `<span class="badge badge-bitrate">${s.bitrate}k</span>` : ''}
+            ${s.codec ? `<span class="badge badge-codec">${s.codec}</span>` : ''}
+            ${s.country ? `<span class="badge badge-country">${escHtml(s.country)}</span>` : ''}
+            ${s.language ? `<span class="badge badge-lang">${escHtml(s.language)}</span>` : ''}
+          </div>
         </div>
         <div class="pl-actions">
           <button class="btn btn-play-small" title="Reproducir"><i class="fas fa-play"></i></button>
           <button class="btn btn-remove" title="Eliminar"><i class="fas fa-times"></i></button>
         </div>
-      </div>
-    `;
-  }).join('');
+      </div>`;
+    });
+
+    html += `</div>`;
+  });
+
+  container.innerHTML = html;
+
+  // Re-bind search input event
+  document.getElementById('plSearch')?.addEventListener('input', onPlSearch);
+
+  // Re-bind drag events on new items
+  container.querySelectorAll('.pl-item[draggable]').forEach(el => {
+    el.addEventListener('dragstart', onPlDragStart);
+    el.addEventListener('dragover', onPlDragOver);
+    el.addEventListener('drop', onPlDrop);
+    el.addEventListener('dragend', onPlDragEnd);
+  });
+}
+
+/* ── Playlist Search ── */
+function onPlSearch(e) {
+  plFilterText = e.target.value;
+  renderPlaylist();
+}
+
+/* ── Playlist Play All / Shuffle ── */
+function playlistPlayAll() {
+  const filtered = getFilteredPlaylist();
+  if (!filtered.length) return;
+  plShuffled = false;
+  plCurrentIndex = 0;
+  playPlItem(plCurrentIndex);
+}
+
+function playlistShuffle() {
+  const filtered = getFilteredPlaylist();
+  if (!filtered.length) return;
+  plShuffled = true;
+  const indices = filtered.map((_, i) => i);
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  plShuffleOrder = indices;
+  plCurrentIndex = 0;
+  playPlItem(plShuffleOrder[0]);
+}
+
+function playPlItem(filteredIdx) {
+  const filtered = getFilteredPlaylist();
+  if (filteredIdx < 0 || filteredIdx >= filtered.length) return;
+  const s = filtered[filteredIdx];
+  if (!s || !s.url) return;
+  play(s.url, s.name, s.uuid);
+}
+
+function playNext() {
+  const filtered = getFilteredPlaylist();
+  if (!filtered.length) return;
+  if (plCurrentIndex < 0) { playlistPlayAll(); return; }
+  plCurrentIndex++;
+  if (plCurrentIndex >= filtered.length) plCurrentIndex = 0;
+  const idx = plShuffled ? plShuffleOrder[plCurrentIndex] : plCurrentIndex;
+  playPlItem(idx);
+}
+
+function playPrev() {
+  const filtered = getFilteredPlaylist();
+  if (!filtered.length) return;
+  if (plCurrentIndex < 0) { playlistPlayAll(); return; }
+  plCurrentIndex--;
+  if (plCurrentIndex < 0) plCurrentIndex = filtered.length - 1;
+  const idx = plShuffled ? plShuffleOrder[plCurrentIndex] : plCurrentIndex;
+  playPlItem(idx);
+}
+
+/* ── Drag & Drop ── */
+function onPlDragStart(e) {
+  const item = e.target.closest('.pl-item');
+  if (!item) return;
+  plDragSrcIndex = parseInt(item.dataset.plIdx);
+  item.classList.add('pl-dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', plDragSrcIndex);
+}
+
+function onPlDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const item = e.target.closest('.pl-item');
+  if (!item) return;
+  document.querySelectorAll('.pl-item').forEach(el => el.classList.remove('pl-drag-over'));
+  item.classList.add('pl-drag-over');
+}
+
+function onPlDrop(e) {
+  e.preventDefault();
+  const target = e.target.closest('.pl-item');
+  if (!target) return;
+  const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
+  const toIdx = parseInt(target.dataset.plIdx);
+  if (isNaN(fromIdx) || isNaN(toIdx) || fromIdx === toIdx) return;
+
+  const item = playlist.splice(fromIdx, 1)[0];
+  const adjustedTo = fromIdx < toIdx ? toIdx - 1 : toIdx;
+  playlist.splice(adjustedTo, 0, item);
+  persistPlaylist();
+  renderPlaylist();
+}
+
+function onPlDragEnd(e) {
+  document.querySelectorAll('.pl-item').forEach(el => {
+    el.classList.remove('pl-dragging', 'pl-drag-over');
+  });
 }
 
 /* ── Playlist Toolbar ── */
@@ -879,6 +1088,7 @@ function onToolbarClick(e) {
     if (btn.id === 'btnExportM3U') exportM3U();
     if (btn.id === 'btnExportJSON') exportJSON();
     if (btn.id === 'btnImportJSON') importJSON();
+    if (btn.id === 'btnImportM3U') importM3U();
     if (btn.id === 'btnHardRefresh') hardRefresh();
   }
 }
@@ -937,7 +1147,17 @@ function exportM3U() {
   if (!playlist.length) return;
   const lines = ['#EXTM3U'];
   playlist.forEach(s => {
-    lines.push(`#EXTINF:-1,${s.name}`);
+    const attrs = [
+      `tvg-id="${s.uuid || ''}"`,
+      `tvg-logo="${s.favicon || ''}"`,
+      `tvg-name="${s.name || ''}"`,
+      `group-title="${s.tags || ''}"`,
+      `tvg-country="${s.country || ''}"`,
+      `tvg-language="${s.language || ''}"`,
+      `tvg-bitrate="${s.bitrate || ''}"`,
+      `tvg-codec="${s.codec || ''}"`,
+    ].join(' ');
+    lines.push(`#EXTINF:-1 ${attrs},${s.name}`);
     lines.push(s.url);
   });
   download(lines.join('\n'), 'radios.m3u', 'audio/x-mpegurl');
@@ -1006,6 +1226,11 @@ function importJSON() {
             tags: s.tags || '',
             country: s.country || '',
             bitrate: s.bitrate || '',
+            codec: s.codec || '',
+            homepage: s.homepage || '',
+            language: s.language || '',
+            state: s.state || '',
+            clickcount: s.clickcount || '',
           });
           existing.add(s.uuid);
           added++;
@@ -1018,6 +1243,78 @@ function importJSON() {
       }
     } catch {
       alert('El archivo no es válido');
+    }
+  };
+  input.click();
+}
+
+function importM3U() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.m3u,.m3u8';
+  input.style.display = 'none';
+  document.body.appendChild(input);
+
+  const cleanup = () => {
+    if (input.parentNode) input.parentNode.removeChild(input);
+  };
+
+  input.addEventListener('cancel', cleanup);
+
+  input.onchange = async () => {
+    cleanup();
+    const file = input.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#EXTM3U'));
+
+      const existing = new Set(playlist.map(s => s.uuid));
+      let added = 0;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.startsWith('#EXTINF:')) {
+          const urlLine = lines[i + 1];
+          if (!urlLine || urlLine.startsWith('#')) continue;
+
+          const attrMatch = line.match(/tvg-id="([^"]*)"/);
+          const nameMatch = line.match(/,([^,]+)$/);
+          const logoMatch = line.match(/tvg-logo="([^"]*)"/);
+          const groupMatch = line.match(/group-title="([^"]*)"/);
+          const countryMatch = line.match(/tvg-country="([^"]*)"/);
+          const langMatch = line.match(/tvg-language="([^"]*)"/);
+          const bitrateMatch = line.match(/tvg-bitrate="([^"]*)"/);
+          const codecMatch = line.match(/tvg-codec="([^"]*)"/);
+
+          const uuid = attrMatch ? attrMatch[1] : `m3u-${i}`;
+          const name = nameMatch ? nameMatch[1] : 'Sin nombre';
+
+          if (!existing.has(uuid)) {
+            playlist.push({
+              uuid,
+              name,
+              url: urlLine,
+              favicon: logoMatch ? logoMatch[1] : '',
+              tags: groupMatch ? groupMatch[1] : '',
+              country: countryMatch ? countryMatch[1] : '',
+              bitrate: bitrateMatch ? bitrateMatch[1] : '',
+              codec: codecMatch ? codecMatch[1] : '',
+              language: langMatch ? langMatch[1] : '',
+            });
+            existing.add(uuid);
+            added++;
+          }
+          i++;
+        }
+      }
+
+      if (added > 0) {
+        persistPlaylist();
+        renderPlaylist();
+      }
+    } catch {
+      alert('El archivo M3U no es válido');
     }
   };
   input.click();
@@ -1052,6 +1349,358 @@ function getActiveFilters() {
   }
   
   return filters;
+}
+
+/* ── Timer and Alarm Logic ── */
+function initTimerAndAlarm() {
+  const btnToggle = document.getElementById('btnTimerToggle');
+  const modal = document.getElementById('timerModal');
+  const btnClose = document.getElementById('btnCloseTimerModal');
+  
+  if (!btnToggle || !modal || !btnClose) return;
+
+  // Toggle Modal open/close
+  btnToggle.addEventListener('click', () => {
+    modal.classList.add('show');
+    populateAlarmStations();
+    updateTimerModalUI();
+  });
+
+  btnClose.addEventListener('click', () => {
+    modal.classList.remove('show');
+  });
+
+  // Close modal when clicking outside content
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.classList.remove('show');
+    }
+  });
+
+  // Open modal if badge is clicked
+  document.getElementById('timerIndicator')?.addEventListener('click', () => btnToggle.click());
+  document.getElementById('alarmIndicator')?.addEventListener('click', () => btnToggle.click());
+
+  // --- Sleep Timer Setup ---
+  const presets = document.querySelectorAll('.sleep-presets .btn-preset[data-minutes]');
+  presets.forEach(btn => {
+    btn.addEventListener('click', () => {
+      presets.forEach(p => p.classList.remove('active'));
+      document.getElementById('customSleepInputWrap').classList.add('hidden');
+      
+      const mins = parseInt(btn.dataset.minutes);
+      setSleepTimer(mins);
+      btn.classList.add('active');
+    });
+  });
+
+  const btnCustom = document.getElementById('btnCustomSleep');
+  const customWrap = document.getElementById('customSleepInputWrap');
+  if (btnCustom && customWrap) {
+    btnCustom.addEventListener('click', () => {
+      presets.forEach(p => p.classList.remove('active'));
+      btnCustom.classList.add('active');
+      customWrap.classList.remove('hidden');
+      document.getElementById('inputCustomSleep').focus();
+    });
+  }
+
+  document.getElementById('btnApplyCustomSleep')?.addEventListener('click', () => {
+    const input = document.getElementById('inputCustomSleep');
+    const mins = parseInt(input.value);
+    if (isNaN(mins) || mins <= 0) {
+      alert('Ingresa un número válido de minutos');
+      return;
+    }
+    setSleepTimer(mins);
+  });
+
+  // --- Alarm Clock Setup ---
+  const inputAlarmTime = document.getElementById('inputAlarmTime');
+  const btnToggleAlarm = document.getElementById('btnToggleAlarm');
+  const selectAlarmStation = document.getElementById('selectAlarmStation');
+
+  if (inputAlarmTime) inputAlarmTime.value = alarmTime;
+  if (selectAlarmStation) {
+    selectAlarmStation.value = alarmStation;
+    selectAlarmStation.addEventListener('change', () => {
+      alarmStation = selectAlarmStation.value;
+      localStorage.setItem('radios_alarm_station', alarmStation);
+      updateTimerModalUI();
+      updateBadges();
+    });
+  }
+
+  if (btnToggleAlarm) {
+    btnToggleAlarm.addEventListener('click', () => {
+      if (alarmEnabled) {
+        // Disable alarm
+        alarmEnabled = false;
+        localStorage.setItem('radios_alarm_enabled', 'false');
+      } else {
+        // Enable alarm
+        const val = inputAlarmTime.value;
+        if (!val) {
+          alert('Por favor selecciona una hora para la alarma.');
+          return;
+        }
+        alarmTime = val;
+        alarmEnabled = true;
+        localStorage.setItem('radios_alarm_time', alarmTime);
+        localStorage.setItem('radios_alarm_enabled', 'true');
+      }
+      updateTimerModalUI();
+      updateBadges();
+    });
+  }
+
+  if (inputAlarmTime) {
+    inputAlarmTime.addEventListener('change', () => {
+      alarmTime = inputAlarmTime.value;
+      localStorage.setItem('radios_alarm_time', alarmTime);
+      if (alarmEnabled) {
+        updateTimerModalUI();
+        updateBadges();
+      }
+    });
+  }
+
+  // Start checking loop for alarm and updating timer countdown
+  if (alarmCheckerInterval) clearInterval(alarmCheckerInterval);
+  alarmCheckerInterval = setInterval(() => {
+    checkAlarm();
+    updateSleepCountdown();
+  }, 1000);
+
+  // Update initial UI state
+  updateTimerModalUI();
+  updateBadges();
+}
+
+function setSleepTimer(minutes) {
+  sleepTimeTarget = Date.now() + minutes * 60 * 1000;
+  
+  updateTimerModalUI();
+  updateBadges();
+}
+
+function cancelSleepTimer() {
+  sleepTimeTarget = null;
+  const presets = document.querySelectorAll('.sleep-presets .btn-preset');
+  presets.forEach(p => p.classList.remove('active'));
+  const customWrap = document.getElementById('customSleepInputWrap');
+  if (customWrap) customWrap.classList.add('hidden');
+  const customInput = document.getElementById('inputCustomSleep');
+  if (customInput) customInput.value = '';
+  
+  updateTimerModalUI();
+  updateBadges();
+}
+
+window.cancelSleepTimer = cancelSleepTimer;
+
+function updateSleepCountdown() {
+  if (!sleepTimeTarget) return;
+  
+  const diff = sleepTimeTarget - Date.now();
+  if (diff <= 0) {
+    sleepTimeTarget = null;
+    triggerSleepStop();
+  } else {
+    updateBadges();
+    // Update status string in modal if open
+    const statusDiv = document.getElementById('sleepTimerStatus');
+    if (statusDiv) {
+      const remainingSecs = Math.floor(diff / 1000);
+      const m = Math.floor(remainingSecs / 60).toString().padStart(2, '0');
+      const s = (remainingSecs % 60).toString().padStart(2, '0');
+      statusDiv.innerHTML = `
+        <span>⏳ Quedan <strong>${m}:${s}</strong> min para apagar.</span>
+        <button class="btn-cancel-timer" onclick="cancelSleepTimer()">Cancelar</button>
+      `;
+      statusDiv.classList.add('active');
+    }
+  }
+}
+
+function triggerSleepStop() {
+  console.log('[TIMER] Sleep timer triggered. Stopping playback.');
+  if (player) {
+    player.stop();
+  }
+  const marquee = document.getElementById('radioDisplay');
+  if (marquee) marquee.textContent = 'Apagado automático por temporizador';
+  
+  updateTimerModalUI();
+  updateBadges();
+}
+
+function populateAlarmStations() {
+  const select = document.getElementById('selectAlarmStation');
+  if (!select) return;
+  
+  const currentVal = select.value || alarmStation;
+  select.innerHTML = '<option value="current">Radio actual / sintonizada</option>';
+  
+  playlist.forEach(s => {
+    const uuid = s.uuid || s.stationuuid || '';
+    if (!uuid) return;
+    const option = document.createElement('option');
+    option.value = uuid;
+    option.textContent = s.name;
+    select.appendChild(option);
+  });
+  
+  if (Array.from(select.options).some(opt => opt.value === currentVal)) {
+    select.value = currentVal;
+  } else {
+    select.value = 'current';
+  }
+}
+
+function updateTimerModalUI() {
+  // Sleep UI
+  const statusDiv = document.getElementById('sleepTimerStatus');
+  if (statusDiv) {
+    if (sleepTimeTarget) {
+      const remaining = Math.max(0, Math.floor((sleepTimeTarget - Date.now()) / 1000));
+      const m = Math.floor(remaining / 60).toString().padStart(2, '0');
+      const s = (remaining % 60).toString().padStart(2, '0');
+      statusDiv.innerHTML = `
+        <span>⏳ Quedan <strong>${m}:${s}</strong> min para apagar.</span>
+        <button class="btn-cancel-timer" onclick="cancelSleepTimer()">Cancelar</button>
+      `;
+      statusDiv.classList.add('active');
+    } else {
+      statusDiv.innerHTML = '<span>Apagado automático desactivado.</span>';
+      statusDiv.classList.remove('active');
+    }
+  }
+
+  // Alarm UI
+  const btnToggleAlarm = document.getElementById('btnToggleAlarm');
+  const alarmStatusDiv = document.getElementById('alarmStatus');
+  
+  if (btnToggleAlarm) {
+    if (alarmEnabled) {
+      btnToggleAlarm.textContent = 'Desactivar';
+      btnToggleAlarm.classList.add('active');
+    } else {
+      btnToggleAlarm.textContent = 'Activar';
+      btnToggleAlarm.classList.remove('active');
+    }
+  }
+
+  if (alarmStatusDiv) {
+    if (alarmEnabled && alarmTime) {
+      let stationName = 'Radio actual';
+      if (alarmStation !== 'current') {
+        const station = playlist.find(s => (s.uuid || s.stationuuid) === alarmStation);
+        if (station) stationName = station.name;
+      }
+      alarmStatusDiv.innerHTML = `
+        <span>🔔 Activa a las <strong>${alarmTime}</strong> sintonizando <em>"${stationName}"</em>.</span>
+      `;
+      alarmStatusDiv.classList.add('active');
+    } else {
+      alarmStatusDiv.innerHTML = '<span>Alarma desactivada.</span>';
+      alarmStatusDiv.classList.remove('active');
+    }
+  }
+}
+
+function updateBadges() {
+  const btnToggle = document.getElementById('btnTimerToggle');
+  const alarmBadge = document.getElementById('alarmIndicator');
+  const sleepBadge = document.getElementById('timerIndicator');
+
+  let anyActive = false;
+
+  // Alarm Badge
+  if (alarmBadge) {
+    if (alarmEnabled && alarmTime) {
+      alarmBadge.textContent = `⏰ ${alarmTime}`;
+      alarmBadge.classList.remove('hidden');
+      anyActive = true;
+    } else {
+      alarmBadge.classList.add('hidden');
+    }
+  }
+
+  // Sleep Badge
+  if (sleepBadge) {
+    if (sleepTimeTarget) {
+      const remaining = Math.max(0, Math.floor((sleepTimeTarget - Date.now()) / 1000));
+      const m = Math.floor(remaining / 60);
+      const s = remaining % 60;
+      sleepBadge.textContent = `⏳ ${m}:${s.toString().padStart(2, '0')}`;
+      sleepBadge.classList.remove('hidden');
+      anyActive = true;
+    } else {
+      sleepBadge.classList.add('hidden');
+    }
+  }
+
+  // Main Toggle Button
+  if (btnToggle) {
+    if (anyActive) {
+      btnToggle.classList.add('active');
+    } else {
+      btnToggle.classList.remove('active');
+    }
+  }
+}
+
+function checkAlarm() {
+  if (!alarmEnabled || !alarmTime) return;
+
+  const now = new Date();
+  const hrs = now.getHours().toString().padStart(2, '0');
+  const mins = now.getMinutes().toString().padStart(2, '0');
+  const currentTimeString = `${hrs}:${mins}`;
+
+  if (currentTimeString === alarmTime) {
+    const todayStr = now.toDateString() + ' ' + currentTimeString;
+    if (lastAlarmTriggeredDate !== todayStr) {
+      lastAlarmTriggeredDate = todayStr;
+      triggerAlarm();
+    }
+  }
+}
+
+function triggerAlarm() {
+  console.log('[ALARM] Alarm clock triggered at %s!', alarmTime);
+  
+  let targetStation = null;
+  if (alarmStation !== 'current') {
+    targetStation = playlist.find(s => (s.uuid || s.stationuuid) === alarmStation);
+  }
+
+  const marquee = document.getElementById('radioDisplay');
+  
+  if (targetStation) {
+    if (marquee) marquee.textContent = `⏰ ¡ALARMA! Sintonizando ${targetStation.name}...`;
+    play(targetStation.url, targetStation.name, targetStation.uuid);
+  } else {
+    // Play current or first playlist item
+    const currentPlayingCard = document.querySelector('.station-card.playing, .pl-item.playing');
+    if (currentPlayingCard) {
+      const name = currentPlayingCard.dataset.name;
+      const url = currentPlayingCard.dataset.url;
+      const uuid = currentPlayingCard.dataset.uuid;
+      if (marquee) marquee.textContent = `⏰ ¡ALARMA! Sintonizando ${name}...`;
+      play(url, name, uuid);
+    } else if (playlist.length > 0) {
+      const first = playlist[0];
+      if (marquee) marquee.textContent = `⏰ ¡ALARMA! Sintonizando ${first.name}...`;
+      play(first.url, first.name, first.uuid);
+    } else {
+      if (marquee) marquee.textContent = '⏰ ¡ALARMA! (No hay radios guardadas en tu playlist)';
+      // Play sponsored 1 as fallback
+      const fallback = SPONSORED_STATIONS[0];
+      play(fallback.url, fallback.name, fallback.uuid);
+    }
+  }
 }
 
 /* ── Helpers ── */

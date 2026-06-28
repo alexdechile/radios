@@ -528,6 +528,14 @@ html, body {
   cursor: default;
 }
 
+.pl-item[draggable="true"] {
+  cursor: grab;
+}
+
+.pl-item[draggable="true"]:active {
+  cursor: grabbing;
+}
+
 .pl-item.playing {
   border-color: var(--sage);
   background: var(--sage-light);
@@ -612,6 +620,151 @@ html, body {
   display: block;
 }
 
+/* ── Playlist Toolbar ── */
+.pl-toolbar {
+  display: flex;
+  gap: 6px;
+  padding: 6px 2px 8px;
+}
+
+.btn-pl-action {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s;
+}
+
+.btn-pl-action:hover {
+  border-color: var(--lavender);
+  color: var(--lavender);
+  background: var(--lavender-light);
+}
+
+/* ── Playlist Search ── */
+.pl-search-wrap {
+  padding: 6px 0;
+}
+
+.pl-search {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 7px 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8rem;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.pl-search:focus {
+  border-color: var(--lavender);
+}
+
+/* ── Playlist Groups ── */
+.pl-group {
+  margin-bottom: 4px;
+}
+
+.pl-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pl-group-name {
+  flex: 1;
+}
+
+.pl-group-count {
+  background: var(--lavender-light);
+  color: var(--lavender);
+  padding: 1px 7px;
+  border-radius: 8px;
+  font-size: 0.6rem;
+  font-weight: 600;
+}
+
+/* ── Drag Handle ── */
+.pl-drag-handle {
+  color: var(--text-light);
+  font-size: 0.7rem;
+  cursor: grab;
+  flex-shrink: 0;
+  padding: 2px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.pl-item:hover .pl-drag-handle {
+  opacity: 1;
+}
+
+.pl-dragging {
+  opacity: 0.4;
+  border-style: dashed;
+}
+
+.pl-drag-over {
+  border-color: var(--lavender) !important;
+  background: var(--lavender-light) !important;
+}
+
+/* ── Playlist Item Enhancements ── */
+.pl-favicon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.pl-favicon-placeholder {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--lavender-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--lavender);
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+
+.pl-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.badge-lang {
+  background: var(--mint);
+  color: #3A8A6A;
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
 .search-divider {
   border: none;
   border-top: 1.5px solid var(--border);
@@ -620,6 +773,374 @@ html, body {
 
 .web-result {
   border-left: 3px solid var(--mint);
+}
+
+/* --- Timer / Alarm --- */
+.player-time-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.btn-timer-toggle {
+  background: var(--bg-soft);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  outline: none;
+}
+
+.btn-timer-toggle:hover {
+  background: var(--lavender-light);
+  color: var(--text-primary);
+  border-color: var(--lavender);
+}
+
+.btn-timer-toggle.active {
+  background: var(--sage-light);
+  color: #2e7d32;
+  border-color: var(--sage);
+  animation: pulse-timer 2.5s infinite;
+}
+
+@keyframes pulse-timer {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.timer-indicator-badge {
+  background: var(--peach-light);
+  color: #c57600;
+  border: 1px solid var(--peach);
+  border-radius: 6px;
+  padding: 1px 5px;
+  font-size: 0.6rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.timer-indicator-badge:hover {
+  filter: brightness(0.95);
+}
+
+.timer-indicator-badge.alarm-active {
+  background: var(--sage-light);
+  color: #2e7d32;
+  border-color: var(--sage);
+}
+
+.timer-modal {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(74, 74, 74, 0.4);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.timer-modal.show {
+  display: flex;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.timer-modal-content {
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 360px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.timer-modal-header {
+  background: linear-gradient(135deg, var(--lavender), var(--sky));
+  padding: 12px 16px;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.timer-modal-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-close-modal {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.timer-modal-body {
+  padding: 16px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.timer-section-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.timer-section-group h4 {
+  margin: 0 0 4px 0;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.section-desc {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  line-height: 1.3;
+}
+
+.sleep-presets {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.btn-preset {
+  flex: 1;
+  background: var(--bg-soft);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-family: 'Inter', sans-serif;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-preset:hover {
+  background: var(--lavender-light);
+  border-color: var(--lavender);
+  color: var(--text-primary);
+}
+
+.btn-preset.active {
+  background: var(--sage-light);
+  border-color: var(--sage);
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+.custom-sleep-input-wrap {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.custom-sleep-input-wrap.hidden {
+  display: none !important;
+}
+
+.custom-sleep-input-wrap input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  outline: none;
+  font-family: 'Inter', sans-serif;
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.custom-sleep-input-wrap input:focus {
+  border-color: var(--lavender);
+}
+
+.btn-apply-custom {
+  background: var(--lavender-light);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+}
+
+.btn-apply-custom:hover {
+  background: var(--lavender);
+  color: white;
+  border-color: var(--lavender);
+}
+
+.timer-status {
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-soft);
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.timer-status.active {
+  border-left-color: var(--sage);
+  background: var(--sage-light);
+  color: #2e7d32;
+}
+
+.btn-cancel-timer {
+  background: transparent;
+  border: none;
+  color: #e07070;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Inter', sans-serif;
+}
+
+.btn-cancel-timer:hover {
+  background: var(--pink-light);
+}
+
+.modal-divider {
+  border: 0;
+  border-top: 1.5px dashed var(--border);
+  margin: 14px 0;
+}
+
+.alarm-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.alarm-time-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  outline: none;
+  font-family: 'Inter', sans-serif;
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.alarm-time-input:focus {
+  border-color: var(--lavender);
+}
+
+.btn-alarm-toggle {
+  background: var(--sky-light);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-alarm-toggle:hover {
+  background: var(--sky);
+  color: white;
+  border-color: var(--sky);
+}
+
+.btn-alarm-toggle.active {
+  background: var(--pink);
+  border-color: var(--pink);
+  color: #721c24;
+}
+
+.btn-alarm-toggle.active:hover {
+  background: #f4b2b2;
+}
+
+.alarm-station-select {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.alarm-station-select label {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.alarm-select {
+  padding: 6px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  outline: none;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+}
+
+.alarm-select:focus {
+  border-color: var(--lavender);
 }
 
 @media (min-width: 1025px) {
