@@ -5,6 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Radios App</title>
 
+  <script>
+    // Detección de iPhone 6 / Pantallas pequeñas / Safari Móvil
+    (function() {
+      if (localStorage.getItem('force_classic_version') === 'true') {
+        return;
+      }
+      var isSmallScreen = window.innerWidth > 0 && window.innerWidth < 480;
+      var isIphoneSafari = /iPhone|iPod/.test(navigator.userAgent) && /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS|OPiOS|mercury/.test(navigator.userAgent);
+      
+      if (isSmallScreen || isIphoneSafari) {
+        window.location.replace('mini.html');
+      }
+    })();
+  </script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -27,14 +42,26 @@
           <span>Radios</span>
         </div>
         <div class="app-header-actions">
+          <button class="btn-header" id="btnMobileVersion" title="Versión Móvil"><i class="fas fa-mobile-screen-button"></i></button>
+          <button class="btn-header" id="btnEqToggle" title="Ecualizador"><i class="fas fa-sliders"></i></button>
           <button class="btn-header" id="btnHardRefresh" title="Actualizar"><i class="fas fa-rotate"></i></button>
         </div>
       </div>
 
       <div class="player-section">
         <div class="player-display">
-          <div class="visualizer-wrap">
-            <canvas id="equalizer" class="equalizer-canvas"></canvas>
+          <!-- Presets de emisoras estilo radio de auto -->
+          <div class="station-presets" id="stationPresets">
+            <div class="sp-label">PRESETS</div>
+            <div class="sp-grid">
+              <button class="sp-btn" id="sp0" data-idx="0"><span class="sp-num">1</span><span class="sp-name">—</span></button>
+              <button class="sp-btn" id="sp1" data-idx="1"><span class="sp-num">2</span><span class="sp-name">—</span></button>
+              <button class="sp-btn" id="sp2" data-idx="2"><span class="sp-num">3</span><span class="sp-name">—</span></button>
+              <button class="sp-btn" id="sp3" data-idx="3"><span class="sp-num">4</span><span class="sp-name">—</span></button>
+              <button class="sp-btn" id="sp4" data-idx="4"><span class="sp-num">5</span><span class="sp-name">—</span></button>
+              <button class="sp-btn" id="sp5" data-idx="5"><span class="sp-num">6</span><span class="sp-name">—</span></button>
+            </div>
+            <div class="sp-hint" id="spHint">Mant. puls. para guardar</div>
           </div>
           <div class="player-info">
             <div class="player-time-row">
@@ -57,6 +84,7 @@
         <div class="search-bar">
           <div class="search-wrapper">
             <input type="text" id="searchInput" placeholder="Buscar emisoras..." autocomplete="off">
+            <button class="search-clear" id="searchClear" title="Limpiar"><i class="fas fa-times"></i></button>
             <div id="searchHistory" class="search-history-dropdown hidden"></div>
           </div>
           <select id="filterBitrate" class="filter-select" title="Bitrate">
@@ -73,7 +101,66 @@
         </div>
       </div>
 
+      <!-- Mini EQ Panel (car radio style) -->
+      <div id="eqPanel" class="eq-panel hidden">
+        <div class="eq-header">
+          <span class="eq-title"><i class="fas fa-wave-square"></i> Ecualizador</span>
+          <div class="eq-presets">
+            <button class="btn-eq-preset" data-preset="flat">FLAT</button>
+            <button class="btn-eq-preset" data-preset="bass">BASS</button>
+            <button class="btn-eq-preset" data-preset="vocal">VOZ</button>
+            <button class="btn-eq-preset" data-preset="treble">AGUDOS</button>
+          </div>
+        </div>
+        <div class="eq-bands">
+          <div class="eq-band">
+            <div class="eq-band-label">60Hz</div>
+            <div class="eq-slider-wrap">
+              <input type="range" id="eqBand0" class="eq-slider" min="-12" max="12" value="0" step="0.5" orient="vertical">
+              <div class="eq-center-line"></div>
+            </div>
+            <div class="eq-band-value" id="eqVal0">0</div>
+          </div>
+          <div class="eq-band">
+            <div class="eq-band-label">250Hz</div>
+            <div class="eq-slider-wrap">
+              <input type="range" id="eqBand1" class="eq-slider" min="-12" max="12" value="0" step="0.5" orient="vertical">
+              <div class="eq-center-line"></div>
+            </div>
+            <div class="eq-band-value" id="eqVal1">0</div>
+          </div>
+          <div class="eq-band">
+            <div class="eq-band-label">1kHz</div>
+            <div class="eq-slider-wrap">
+              <input type="range" id="eqBand2" class="eq-slider" min="-12" max="12" value="0" step="0.5" orient="vertical">
+              <div class="eq-center-line"></div>
+            </div>
+            <div class="eq-band-value" id="eqVal2">0</div>
+          </div>
+          <div class="eq-band">
+            <div class="eq-band-label">4kHz</div>
+            <div class="eq-slider-wrap">
+              <input type="range" id="eqBand3" class="eq-slider" min="-12" max="12" value="0" step="0.5" orient="vertical">
+              <div class="eq-center-line"></div>
+            </div>
+            <div class="eq-band-value" id="eqVal3">0</div>
+          </div>
+          <div class="eq-band">
+            <div class="eq-band-label">16kHz</div>
+            <div class="eq-slider-wrap">
+              <input type="range" id="eqBand4" class="eq-slider" min="-12" max="12" value="0" step="0.5" orient="vertical">
+              <div class="eq-center-line"></div>
+            </div>
+            <div class="eq-band-value" id="eqVal4">0</div>
+          </div>
+        </div>
+      </div>
+
       <div class="controls-section">
+        <!-- Visualizador de frecuencias (tira delgada) -->
+        <div class="viz-strip">
+          <canvas id="equalizer" class="equalizer-canvas"></canvas>
+        </div>
         <div class="transport-buttons">
           <button class="btn-transport" id="btnPrev"><i class="fas fa-backward-step"></i></button>
           <button class="btn-transport play-main" id="btnPlayWinamp"><i class="fas fa-play"></i></button>

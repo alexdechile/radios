@@ -7,26 +7,137 @@ import re
 import sys
 import os
 import socket
+import sqlite3
 from scrapling.fetchers import Fetcher
 
 PORT = 8000
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "radios_curated.db")
+
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS curated_radios (
+            uuid TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            url TEXT NOT NULL,
+            favicon TEXT DEFAULT '',
+            tags TEXT DEFAULT '',
+            country TEXT DEFAULT '',
+            bitrate TEXT DEFAULT '',
+            codec TEXT DEFAULT '',
+            homepage TEXT DEFAULT '',
+            language TEXT DEFAULT '',
+            state TEXT DEFAULT '',
+            clickcount TEXT DEFAULT '',
+            position INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+init_db()
 
 
 class RadiosHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path.startswith("/api/websearch"):
+        if self.path.startswith("/api/curated"):
+            self.handle_get_curated()
+        elif self.path.startswith("/api/websearch"):
             self.handle_websearch()
         elif self.path.startswith("/proxy"):
             self.handle_proxy()
         else:
             self.handle_static()
 
+    def do_POST(self):
+        if self.path.startswith("/api/curated"):
+            self.handle_add_curated()
+
+    def do_DELETE(self):
+        if self.path.startswith("/api/curated"):
+            self.handle_delete_curated()
+
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header(
+            "Access-Control-Allow-Methods", "GET, POST, DELETE, PUT, OPTIONS"
+        )
         self.send_header("Access-Control-Allow-Headers", "*")
         self.end_headers()
+
+    def handle_get_curated(self):
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute(
+                "SELECT * FROM curated_radios ORDER BY position ASC, created_at ASC"
+            )
+            rows = [dict(r) for r in c.fetchall()]
+            conn.close()
+            self.send_json(rows)
+        except Exception as e:
+            self.send_json({"error": str(e)}, 500)
+
+    def handle_add_curated(self):
+        try:
+            length = int(self.headers.get("Content-length", 0))
+            body = self.rfile.read(length).decode("utf-8")
+            data = json.loads(body)
+            uuid = data.get("uuid", "")
+            if not uuid:
+                self.send_json({"error": "uuid required"}, 400)
+                return
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute(
+                """
+                INSERT OR REPLACE INTO curated_radios
+                    (uuid, name, url, favicon, tags, country, bitrate, codec, homepage, language, state, clickcount)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    uuid,
+                    data.get("name", ""),
+                    data.get("url", ""),
+                    data.get("favicon", ""),
+                    data.get("tags", ""),
+                    data.get("country", ""),
+                    data.get("bitrate", ""),
+                    data.get("codec", ""),
+                    data.get("homepage", ""),
+                    data.get("language", ""),
+                    data.get("state", ""),
+                    data.get("clickcount", ""),
+                ),
+            )
+            conn.commit()
+            conn.close()
+            self.send_json({"status": "ok", "uuid": uuid})
+        except Exception as e:
+            self.send_json({"error": str(e)}, 500)
+
+    def handle_delete_curated(self):
+        try:
+            parsed = urllib.parse.urlparse(self.path)
+            params = urllib.parse.parse_qs(parsed.query)
+            uuid = params.get("uuid", [None])[0]
+            if not uuid:
+                self.send_json({"error": "uuid query parameter required"}, 400)
+                return
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute("DELETE FROM curated_radios WHERE uuid = ?", (uuid,))
+            conn.commit()
+            conn.close()
+            self.send_json({"status": "deleted", "uuid": uuid})
+        except Exception as e:
+            self.send_json({"error": str(e)}, 500)
 
     def handle_static(self):
         # Basic static file serving logic

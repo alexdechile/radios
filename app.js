@@ -39,6 +39,37 @@ let cachedServer = null;
 let metadataInterval = null;
 let audioCtx = null;
 let analyser = null;
+let eqFilters = [];   // 5 BiquadFilter nodes
+let eqActive = false; // panel open state
+
+// Station Presets state
+const SP_KEY = 'radios_station_presets';
+let stationPresets = (() => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SP_KEY) || 'null');
+    if (Array.isArray(raw) && raw.length === 6) return raw;
+  } catch(e) {}
+  return Array(6).fill(null);
+})();
+let currentPlayingPreset = -1; // index of preset currently playing (-1 = none)
+let currentPlayingStation = null; // { url, name, uuid }
+
+// EQ band config: [frequency Hz, type]
+const EQ_BANDS = [
+  { freq: 60,    type: 'lowshelf'  },
+  { freq: 250,   type: 'peaking'   },
+  { freq: 1000,  type: 'peaking'   },
+  { freq: 4000,  type: 'peaking'   },
+  { freq: 16000, type: 'highshelf' },
+];
+
+// Presets [60Hz, 250Hz, 1kHz, 4kHz, 16kHz]
+const EQ_PRESETS = {
+  flat:   [0,   0,   0,   0,   0 ],
+  bass:   [8,   4,   0,  -2,  -2 ],
+  vocal:  [-2,  0,   5,   4,   0 ],
+  treble: [-2, -2,   0,   4,   8 ],
+};
 
 // Timer & Alarm state
 let sleepTimeTarget = null; // timestamp when sleep timer triggers
@@ -66,6 +97,9 @@ async function init() {
 
   playlist = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
   searchHistory = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+
+  // Sync curated radios from server SQLite
+  syncCuratedFromServer();
 
   // Inyectar patrocinadas (asegurando que no se repitan)
   SPONSORED_STATIONS.forEach(sponsored => {
@@ -102,10 +136,28 @@ async function init() {
 
   const input = document.getElementById('searchInput');
   const historyDropdown = document.getElementById('searchHistory');
+  const searchClear = document.getElementById('searchClear');
   let debounce;
+
+  function updateSearchClear() {
+    if (searchClear) {
+      searchClear.classList.toggle('visible', input.value.length > 0);
+    }
+  }
+
+  if (searchClear) {
+    searchClear.addEventListener('click', () => {
+      input.value = '';
+      input.focus();
+      searchClear.classList.remove('visible');
+      document.getElementById('results').innerHTML = '';
+      if (historyDropdown) historyDropdown.classList.add('hidden');
+    });
+  }
 
   if (input) {
     input.addEventListener('input', () => {
+      updateSearchClear();
       clearTimeout(debounce);
       const q = input.value.trim();
       renderHistory(q);
@@ -216,6 +268,10 @@ async function init() {
   document.getElementById('btnImportM3U')?.addEventListener('click', (e) => onToolbarClick(e));
   document.getElementById('btnCopyPlaylist')?.addEventListener('click', copyPlaylistToClipboard);
   document.getElementById('btnHardRefresh')?.addEventListener('click', hardRefresh);
+  document.getElementById('btnMobileVersion')?.addEventListener('click', () => {
+    localStorage.removeItem('force_classic_version');
+    window.location.href = 'mini.html';
+  });
 
   // Playlist toolbar
   document.getElementById('plSearch')?.addEventListener('input', onPlSearch);
@@ -234,6 +290,12 @@ async function init() {
 
   // Init Timer & Alarm
   initTimerAndAlarm();
+
+  // Init EQ Panel UI
+  initEqPanel();
+
+  // Init Station Presets
+  initStationPresets();
 }
 
 /* ── History Logic ── */
@@ -274,24 +336,161 @@ function renderHistory(filter = '') {
   dropdown.classList.remove('hidden');
 }
 
+/* ── Station Presets ── */
+function initStationPresets() {
+  renderStationPresets();
+
+  const grid = document.querySelector('.sp-grid');
+  if (!grid) return;
+
+  // Long-press state per button
+  const timers = {};
+
+  grid.addEventListener('pointerdown', (e) => {
+    const btn = e.target.closest('.sp-btn');
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.idx, 10);
+
+    timers[idx] = setTimeout(() => {
+      // Long press → save current station
+      if (!currentPlayingStation) {
+        showSpHint('▶ Primero reproduce una radio');
+        return;
+      }
+      stationPresets[idx] = { ...currentPlayingStation };
+      localStorage.setItem(SP_KEY, JSON.stringify(stationPresets));
+      renderStationPresets();
+      syncPresetActiveState(currentPlayingStation.url);
+      showSpHint(`✔ Guardado en ${idx + 1}`);
+    }, 500);
+  });
+
+  const cancelTimer = (e) => {
+    const btn = e.target.closest('.sp-btn');
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.idx, 10);
+    clearTimeout(timers[idx]);
+  };
+
+  grid.addEventListener('pointerup', cancelTimer);
+  grid.addEventListener('pointerleave', cancelTimer);
+
+  grid.addEventListener('click', (e) => {
+    const btn = e.target.closest('.sp-btn');
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.idx, 10);
+    const preset = stationPresets[idx];
+
+    if (preset) {
+      // Play this preset
+      currentPlayingPreset = idx;
+      play(preset.url, preset.name, preset.uuid);
+    } else {
+      // Empty → save current if playing
+      if (!currentPlayingStation) {
+        showSpHint('▶ Primero reproduce una radio');
+        return;
+      }
+      stationPresets[idx] = { ...currentPlayingStation };
+      localStorage.setItem(SP_KEY, JSON.stringify(stationPresets));
+      renderStationPresets();
+      syncPresetActiveState(currentPlayingStation.url);
+      showSpHint(`✔ Guardado en ${idx + 1}`);
+    }
+  });
+
+  // Context menu (right-click / long-tap) to clear a preset
+  grid.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const btn = e.target.closest('.sp-btn');
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.idx, 10);
+    if (stationPresets[idx]) {
+      stationPresets[idx] = null;
+      if (currentPlayingPreset === idx) currentPlayingPreset = -1;
+      localStorage.setItem(SP_KEY, JSON.stringify(stationPresets));
+      renderStationPresets();
+      showSpHint(`Preset ${idx + 1} borrado`);
+    }
+  });
+}
+
+function renderStationPresets() {
+  for (let i = 0; i < 6; i++) {
+    const btn  = document.getElementById(`sp${i}`);
+    if (!btn) continue;
+    const p    = stationPresets[i];
+    const nameEl = btn.querySelector('.sp-name');
+    btn.classList.toggle('sp-filled', !!p);
+    btn.classList.toggle('sp-active', i === currentPlayingPreset);
+    if (nameEl) nameEl.textContent = p ? shortName(p.name) : '—';
+    btn.title = p ? `${p.name}\nClick: reproducir\nDer. click: borrar` : 'Click o mant. puls. para guardar radio actual';
+  }
+}
+
+function syncPresetActiveState(url) {
+  currentPlayingPreset = -1;
+  for (let i = 0; i < 6; i++) {
+    if (stationPresets[i] && stationPresets[i].url === url) {
+      currentPlayingPreset = i;
+      break;
+    }
+  }
+  renderStationPresets();
+}
+
+function shortName(name) {
+  // Abbreviate to fit the tiny button
+  return name.length > 7 ? name.slice(0, 6) + '…' : name;
+}
+
+let spHintTimer = null;
+function showSpHint(msg) {
+  const el = document.getElementById('spHint');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('visible');
+  clearTimeout(spHintTimer);
+  spHintTimer = setTimeout(() => {
+    el.classList.remove('visible');
+  }, 2000);
+}
+
 function initEqualizer() {
   const audio = document.getElementById('audioPlayer');
-  if (audio.crossOrigin !== 'anonymous' && !audio.src.startsWith(location.origin)) {
-    return; // CORS no permitido, ecualizador no disponible
-  }
   if (audioCtx) {
     if (audioCtx.state === 'suspended') audioCtx.resume();
     return;
   }
-  
+
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   analyser = audioCtx.createAnalyser();
+
+  // Build EQ filter chain
+  eqFilters = EQ_BANDS.map((band, i) => {
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = band.type;
+    filter.frequency.value = band.freq;
+    filter.Q.value = 1.4;
+    // Restore saved gain
+    const saved = parseFloat(localStorage.getItem(`eq_band_${i}`) || '0');
+    filter.gain.value = saved;
+    return filter;
+  });
+
+  // Chain: source → filter[0] → filter[1] → ... → analyser → destination
   try {
     const source = audioCtx.createMediaElementSource(audio);
-    source.connect(analyser);
+    let node = source;
+    for (const filter of eqFilters) {
+      node.connect(filter);
+      node = filter;
+    }
+    node.connect(analyser);
     analyser.connect(audioCtx.destination);
   } catch (e) {
     audioCtx = null;
+    eqFilters = [];
     return;
   }
   analyser.fftSize = 64;
@@ -316,7 +515,6 @@ function initEqualizer() {
 
     for(let i = 0; i < bufferLength; i++) {
       barHeight = dataArray[i] / 2;
-      // Sketch style bars: slightly irregular
       const jitter = Math.random() * 2;
       ctx.moveTo(x, canvas.height);
       ctx.lineTo(x + jitter, canvas.height - barHeight);
@@ -324,10 +522,71 @@ function initEqualizer() {
     }
     ctx.stroke();
   }
-  
+
   canvas.width = canvas.offsetWidth;
   canvas.height = canvas.offsetHeight;
   draw();
+
+  // Sync slider UI to restored values
+  EQ_BANDS.forEach((_, i) => {
+    const slider = document.getElementById(`eqBand${i}`);
+    const valEl  = document.getElementById(`eqVal${i}`);
+    if (!slider || !eqFilters[i]) return;
+    const saved = parseFloat(localStorage.getItem(`eq_band_${i}`) || '0');
+    slider.value = saved;
+    valEl.textContent = saved > 0 ? `+${saved}` : `${saved}`;
+  });
+}
+
+/* ── EQ Panel UI ── */
+function initEqPanel() {
+  const btnToggle = document.getElementById('btnEqToggle');
+  const panel     = document.getElementById('eqPanel');
+  if (!btnToggle || !panel) return;
+
+  // Toggle panel open/close
+  btnToggle.addEventListener('click', () => {
+    eqActive = !eqActive;
+    panel.classList.toggle('hidden', !eqActive);
+    btnToggle.classList.toggle('eq-active', eqActive);
+  });
+
+  // Slider → BiquadFilter gain
+  EQ_BANDS.forEach((_, i) => {
+    const slider = document.getElementById(`eqBand${i}`);
+    const valEl  = document.getElementById(`eqVal${i}`);
+    if (!slider) return;
+
+    slider.addEventListener('input', () => {
+      const val = parseFloat(slider.value);
+      valEl.textContent = val > 0 ? `+${val}` : `${val}`;
+      localStorage.setItem(`eq_band_${i}`, val);
+      if (eqFilters[i]) eqFilters[i].gain.value = val;
+      // Clear active preset highlight
+      document.querySelectorAll('.btn-eq-preset').forEach(b => b.classList.remove('active'));
+    });
+  });
+
+  // Preset buttons
+  document.querySelectorAll('.btn-eq-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const preset = EQ_PRESETS[btn.dataset.preset];
+      if (!preset) return;
+
+      preset.forEach((gain, i) => {
+        const slider = document.getElementById(`eqBand${i}`);
+        const valEl  = document.getElementById(`eqVal${i}`);
+        if (!slider) return;
+        slider.value = gain;
+        valEl.textContent = gain > 0 ? `+${gain}` : `${gain}`;
+        localStorage.setItem(`eq_band_${i}`, gain);
+        if (eqFilters[i]) eqFilters[i].gain.value = gain;
+      });
+
+      document.querySelectorAll('.btn-eq-preset').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
 }
 
 function triggerSearch() {
@@ -679,12 +938,19 @@ function play(url, name, uuid) {
   const audio = document.getElementById('audioPlayer');
   console.log('[PLAY] name=%s uuid=%s url=%s', name, uuid, url);
 
+  // Track currently playing station for preset assignment
+  currentPlayingStation = { url, name, uuid };
+  // Sync preset active state
+  syncPresetActiveState(url);
+
   // Clear previous metadata interval
   if (metadataInterval) clearInterval(metadataInterval);
 
-  // Remove playing state from all
+  // Remove playing state from all, then highlight matching card
   document.querySelectorAll('.station-card.playing, .pl-item.playing')
     .forEach((el) => el.classList.remove('playing'));
+  document.querySelectorAll(`.station-card[data-url="${escAttr(url)}"], .pl-item[data-url="${escAttr(url)}"]`)
+    .forEach((el) => el.classList.add('playing'));
 
   // Update Display immediately for feedback
   const display = document.getElementById('radioDisplay');
@@ -857,13 +1123,63 @@ function addToPlaylist(station) {
   persistPlaylist();
   renderPlaylist();
   updateResultAddButton(station.uuid, true);
+  if (!station.is_sponsored) syncCuratedToServer(station);
 }
 
 function removeFromPlaylist(uuid) {
+  const removed = playlist.find((s) => s.uuid === uuid);
   playlist = playlist.filter((s) => s.uuid !== uuid);
   persistPlaylist();
   renderPlaylist();
   updateResultAddButton(uuid, false);
+  if (removed && !removed.is_sponsored) removeCuratedFromServer(uuid);
+}
+
+/* ── SQLite Curated Radios Sync ── */
+async function syncCuratedFromServer() {
+  try {
+    const res = await fetch('/api/curated');
+    if (res.ok) {
+      const serverList = await res.json();
+      if (Array.isArray(serverList) && serverList.length > 0) {
+        const localUuids = new Set(playlist.map(s => s.uuid));
+        let added = 0;
+        serverList.forEach(s => {
+          if (s.uuid && !localUuids.has(s.uuid) && !s.is_sponsored) {
+            playlist.push(s);
+            localUuids.add(s.uuid);
+            added++;
+          }
+        });
+        if (added > 0) {
+          persistPlaylist();
+          renderPlaylist();
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('SQLite sync from server failed, using localStorage:', e);
+  }
+}
+
+async function syncCuratedToServer(station) {
+  try {
+    await fetch('/api/curated', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(station),
+    });
+  } catch (e) {
+    console.warn('SQLite sync to server failed:', e);
+  }
+}
+
+async function removeCuratedFromServer(uuid) {
+  try {
+    await fetch(`/api/curated?uuid=${encodeURIComponent(uuid)}`, { method: 'DELETE' });
+  } catch (e) {
+    console.warn('SQLite remove from server failed:', e);
+  }
 }
 
 function persistPlaylist() {

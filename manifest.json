@@ -1,0 +1,17 @@
+{
+  "name": "Radios Sketch Player",
+  "short_name": "Radios",
+  "description": "Streaming de radios online con estética de sketch.",
+  "start_url": "/radios/",
+  "display": "standalone",
+  "background_color": "#FFF8EC",
+  "theme_color": "#D4A017",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
