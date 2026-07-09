@@ -925,10 +925,10 @@ function renderResults(stations, isAppend = false) {
         <div class="station-card-body">
           <div class="station-name">${name}</div>
           ${tagList.length ? `<div class="station-tags">${tagList.join(', ')}</div>` : ''}
+          <div class="station-card-badges">${badgeHtml}</div>
         </div>
         <div class="station-card-footer">
           <button class="btn-play-card" title="Reproducir"><i class="fas fa-play"></i></button>
-          <div class="station-card-badges">${badgeHtml}</div>
           ${inPl
             ? `<button class="btn-add-card is-fav" title="Quitar de playlist"><i class="fas fa-heart"></i></button>`
             : `<button class="btn-add-card" title="Agregar a playlist"><i class="fas fa-plus"></i></button>`
