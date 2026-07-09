@@ -95,6 +95,59 @@ body {
   50% { opacity: 0.7; transform: scale(1.1); }
 }
 
+.header-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.btn-header-mini {
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+.btn-header-mini:hover {
+  background: rgba(255,255,255,0.4);
+}
+
+.btn-classic-mode {
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.btn-classic-mode:hover {
+  background: rgba(255,255,255,0.4);
+}
+
+.header-title i {
+  font-size: 1.2rem;
+  animation: pulse-broadcast 3s infinite ease-in-out;
+}
+
+@keyframes pulse-broadcast {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.1); }
+}
+
 .btn-classic-mode {
   background: rgba(255, 255, 255, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.4);
@@ -276,18 +329,33 @@ body {
 /* Content Lists */
 .content-container {
   flex-grow: 1;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 16px;
+  overflow: hidden;
+  position: relative;
   background-color: var(--bg-soft);
 }
 
 .tab-content {
-  min-height: 100%;
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .tab-content.hidden {
   display: none;
+}
+
+.tab-content::-webkit-scrollbar { width: 4px; }
+.tab-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+#sectionResults.tab-content {
+  overflow-y: hidden;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  white-space: nowrap;
 }
 
 .radio-list {
@@ -295,6 +363,59 @@ body {
   flex-direction: column;
   padding: 8px;
   gap: 8px;
+}
+
+#sectionResults .radio-list {
+  flex-direction: row;
+  padding: 8px 12px;
+  gap: 10px;
+  height: 100%;
+  align-items: stretch;
+}
+
+#sectionPlaylist .radio-item {
+  flex: none;
+  width: auto;
+  flex-direction: row;
+  scroll-snap-align: none;
+  padding: 10px 12px;
+}
+
+#sectionPlaylist .radio-card-art {
+  height: 50px;
+  width: 50px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+#sectionPlaylist .radio-card-art img {
+  width: 30px;
+  height: 30px;
+}
+#sectionPlaylist .radio-card-art .placeholder-icon {
+  width: 30px;
+  height: 30px;
+  font-size: 0.9rem;
+}
+
+#sectionPlaylist .radio-card-body {
+  padding: 0 8px;
+  flex: 1;
+}
+
+#sectionPlaylist .radio-card-footer {
+  padding: 0;
+  gap: 4px;
+}
+
+#sectionPlaylist .btn-card-play {
+  width: 30px;
+  height: 30px;
+  font-size: 0.75rem;
+}
+#sectionPlaylist .btn-card-fav {
+  width: 26px;
+  height: 26px;
+  font-size: 0.65rem;
 }
 
 .list-placeholder {
@@ -317,22 +438,27 @@ body {
   font-size: 0.9rem;
 }
 
-/* Radio Station Card */
+/* Radio Station Card — Diet Classic */
 .radio-item {
-  background: white;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  flex: 0 0 220px;
+  width: 220px;
+  scroll-snap-align: start;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  border-radius: var(--radius-sm);
+  background: white;
+  border: 1.5px solid var(--border);
+  overflow: hidden;
+  cursor: pointer;
   box-shadow: var(--shadow);
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.radio-item:hover {
+  border-color: var(--lavender);
 }
 
 .radio-item.active {
   border-color: #FF6B35;
-  background: linear-gradient(135deg, #FFF0E6, #FFE4D6);
   box-shadow: 0 0 16px rgba(255, 107, 53, 0.3);
   animation: mini-glow-pulse 1.8s ease-in-out infinite;
 }
@@ -342,37 +468,149 @@ body {
   50% { box-shadow: 0 0 24px rgba(255, 107, 53, 0.5); }
 }
 
-.radio-item-details {
-  flex-grow: 1;
+.radio-card-art {
+  height: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--lavender-light), var(--sky-light));
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.radio-card-art img {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  object-fit: contain;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.10);
+}
+.radio-card-art .placeholder-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card);
+  color: var(--lavender);
+  font-size: 1.4rem;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.08);
+}
+
+.radio-item.active .radio-card-art {
+  background: linear-gradient(135deg, #FFF0E6, #FFE4D6);
+}
+
+.radio-card-body {
+  flex: 1;
+  padding: 10px 12px 6px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  overflow: hidden;
-  margin-right: 8px;
+  gap: 4px;
+  justify-content: center;
+  min-height: 0;
 }
 
 .radio-item-name {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.9rem;
   color: var(--text-primary);
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.3;
 }
 
 .radio-item-meta {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--text-secondary);
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
 .radio-item-meta span {
   background-color: var(--bg-page);
   padding: 1px 4px;
   border-radius: 4px;
   margin-right: 4px;
+  font-size: 0.6rem;
+}
+
+.radio-card-footer {
+  padding: 4px 8px 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.btn-card-play {
+  background: var(--sage-light);
+  border: 1.5px solid var(--sage);
+  border-radius: 8px;
+  color: var(--text-primary);
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.15s;
+  margin-right: auto;
+}
+.btn-card-play:hover {
+  background: var(--sage);
+  color: white;
+}
+.radio-item.active .btn-card-play {
+  background: #FF6B35;
+  border-color: #FF6B35;
+  color: white;
+}
+
+.btn-card-fav {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-light);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.7rem;
+  transition: all 0.15s;
+}
+.btn-card-fav:hover {
+  border-color: var(--pink);
+  color: var(--pink);
+}
+.btn-card-fav.is-fav {
+  border-color: var(--pink);
+  color: var(--pink);
+  background: var(--pink-light);
+}
+
+.list-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  color: var(--text-light);
+  text-align: center;
+  gap: 12px;
+}
+
+.list-placeholder i {
+  font-size: 2.5rem;
+  color: var(--border);
+}
+
+.list-placeholder p {
+  font-size: 0.9rem;
 }
 
 .radio-item-actions {

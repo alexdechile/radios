@@ -91,6 +91,10 @@ function setupEventListeners() {
     window.location.href = 'index.html';
   });
 
+  // Export/Import JSON
+  document.getElementById('btnMiniExportJSON')?.addEventListener('click', () => exportMiniPlaylist());
+  document.getElementById('btnMiniImportJSON')?.addEventListener('click', () => importMiniPlaylist());
+
   // Tab switching
   const tabs = document.querySelectorAll('.mini-tabs .tab-btn');
   tabs.forEach(tab => {
@@ -512,80 +516,72 @@ function renderPlaylist() {
   });
 }
 
-// Create Card Radio Element
+// Create Card Radio Element — Diet Classic
 function createRadioItem(station, index) {
   const isCurrent = currentStation && currentStation.url === station.url;
   const isFav = playlist.some(p => p.url === station.url);
+  const favicon = station.favicon || '';
+  const tags = station.tags || '';
+  const tagList = tags.split(',').map(t => t.trim()).filter(Boolean).slice(0, 2);
+  const metaParts = [];
+  if (station.country) metaParts.push(`<span>${station.country}</span>`);
+  if (station.bitrate && station.bitrate !== '0') metaParts.push(`<span>${station.bitrate}k</span>`);
+  if (station.codec) metaParts.push(`<span>${station.codec}</span>`);
 
   const div = document.createElement('div');
   div.className = `radio-item ${isCurrent ? 'active' : ''}`;
-  div.setAttribute('data-uuid', station.uuid);
+  div.dataset.uuid = station.uuid;
+  div.dataset.url = station.url;
+  div.dataset.name = station.name;
 
-  const details = document.createElement('div');
-  details.className = 'radio-item-details';
-  details.addEventListener('click', () => {
+  div.innerHTML = `
+    <div class="radio-card-art">
+      ${favicon
+        ? `<img src="${escAttr(favicon)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+        : `<div class="placeholder-icon"><i class="fas fa-radio"></i></div>`
+      }
+    </div>
+    <div class="radio-card-body">
+      <div class="radio-item-name">${escHtml(station.name)}</div>
+      ${tagList.length ? `<div class="radio-item-meta">${tagList.join(', ')}</div>` : ''}
+    </div>
+    <div class="radio-card-footer">
+      <button class="btn-card-play">${(isCurrent && !audio.paused) ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>'}</button>
+      <button class="btn-card-fav ${isFav ? 'is-fav' : ''}">${isFav ? '<i class="fas fa-heart"></i>' : '<i class="far fa-heart"></i>'}</button>
+    </div>
+  `;
+
+  div.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (btn) {
+      if (btn.classList.contains('btn-card-fav')) {
+        e.stopPropagation();
+        toggleFavorite(station);
+        return;
+      }
+      if (btn.classList.contains('btn-card-play')) {
+        e.stopPropagation();
+        if (isCurrent && !audio.paused) {
+          audio.pause();
+        } else {
+          playStation(station);
+        }
+        return;
+      }
+    }
     playStation(station);
   });
 
-  const name = document.createElement('div');
-  name.className = 'radio-item-name';
-  name.textContent = station.name;
-
-  const meta = document.createElement('div');
-  meta.className = 'radio-item-meta';
-  
-  let metaHTML = '';
-  if (station.country) {
-    metaHTML += `<span>${station.country}</span>`;
-  }
-  if (station.bitrate && station.bitrate !== '0') {
-    metaHTML += `<span>${station.bitrate}k</span>`;
-  }
-  if (station.codec) {
-    metaHTML += `<span>${station.codec}</span>`;
-  }
-  if (station.tags) {
-    metaHTML += ` ${station.tags.split(',').slice(0, 3).join(', ')}`;
-  }
-  meta.innerHTML = metaHTML;
-
-  details.appendChild(name);
-  details.appendChild(meta);
-
-  const actions = document.createElement('div');
-  actions.className = 'radio-item-actions';
-
-  const btnPlay = document.createElement('button');
-  btnPlay.className = 'btn-item btn-item-play';
-  btnPlay.innerHTML = (isCurrent && !audio.paused) ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
-  btnPlay.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (isCurrent) {
-      if (audio.paused) {
-        audio.play().catch(err => console.warn(err));
-      } else {
-        audio.pause();
-      }
-    } else {
-      playStation(station);
-    }
-  });
-
-  const btnFav = document.createElement('button');
-  btnFav.className = `btn-item btn-item-fav ${isFav ? 'is-fav' : ''}`;
-  btnFav.innerHTML = isFav ? '<i class="fas fa-heart"></i>' : '<i class="far fa-heart"></i>';
-  btnFav.addEventListener('click', (e) => {
-    e.stopPropagation();
-    toggleFavorite(station);
-  });
-
-  actions.appendChild(btnPlay);
-  actions.appendChild(btnFav);
-
-  div.appendChild(details);
-  div.appendChild(actions);
-
   return div;
+}
+
+function escAttr(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // Toggle Favorite Station
@@ -657,24 +653,24 @@ function updateRadioCardsActiveState() {
   const items = document.querySelectorAll('.radio-item');
   items.forEach(item => {
     const isThisCurrent = currentStation && item.getAttribute('data-uuid') === currentStation.uuid;
-    const playBtn = item.querySelector('.btn-item-play');
-    const favBtn = item.querySelector('.btn-item-fav');
+    const playBtn = item.querySelector('.btn-card-play');
+    const favBtn = item.querySelector('.btn-card-fav');
     
     if (isThisCurrent) {
       item.classList.add('active');
-      playBtn.innerHTML = audio.paused ? '<i class="fas fa-play"></i>' : '<i class="fas fa-pause"></i>';
+      if (playBtn) playBtn.innerHTML = audio.paused ? '<i class="fas fa-play"></i>' : '<i class="fas fa-pause"></i>';
     } else {
       item.classList.remove('active');
-      playBtn.innerHTML = '<i class="fas fa-play"></i>';
+      if (playBtn) playBtn.innerHTML = '<i class="fas fa-play"></i>';
     }
 
-    // Refresh heart icon just in case
-    const isFav = playlist.some(p => p.uuid === item.getAttribute('data-uuid'));
+    if (!favBtn) return;
+    const isFav = playlist.some(p => p.uuid === item.getAttribute('data-uuid') || p.url === item.dataset.url);
     if (isFav) {
-      favBtn.className = 'btn-item btn-item-fav is-fav';
+      favBtn.className = 'btn-card-fav is-fav';
       favBtn.innerHTML = '<i class="fas fa-heart"></i>';
     } else {
-      favBtn.className = 'btn-item btn-item-fav';
+      favBtn.className = 'btn-card-fav';
       favBtn.innerHTML = '<i class="far fa-heart"></i>';
     }
   });
@@ -766,4 +762,44 @@ function updatePlayerInfo(station) {
   if (station.tags) subtitle += `• ${station.tags.split(',').slice(0, 2).join(', ')}`;
   
   document.getElementById('nowPlayingSub').textContent = subtitle;
+}
+
+// Export playlist as JSON
+function exportMiniPlaylist() {
+  const dataStr = JSON.stringify(playlist, null, 2);
+  const blob = new Blob([dataStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `radios-playlist-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Import playlist from JSON
+function importMiniPlaylist() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (Array.isArray(data)) {
+          playlist = data;
+          savePlaylist();
+          renderPlaylist();
+          updateFavBadge();
+          updateRadioCardsActiveState();
+        }
+      } catch (err) {
+        alert('Error al cargar el archivo JSON');
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 }
