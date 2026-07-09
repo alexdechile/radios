@@ -518,17 +518,18 @@ html, body {
 }
 
 #resultsSection.content-scroll {
-  height: 100%;
+  position: absolute;
+  inset: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 0;
-  position: relative;
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
 }
 
 #playlistSection.content-scroll {
+  position: absolute;
+  inset: 0;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 8px;
@@ -542,10 +543,11 @@ html, body {
   display: flex;
   flex-direction: row;
   gap: 16px;
-  padding: 12px 52px 20px;
+  padding: 12px 52px;
   height: 100%;
   align-items: stretch;
   white-space: nowrap;
+  box-sizing: border-box;
 }
 
 .station-card {
@@ -555,7 +557,6 @@ html, body {
   margin-bottom: 0;
   display: flex;
   flex-direction: column;
-  min-height: 100%;
   border-radius: var(--radius-sm);
   background: var(--bg-card);
   border: 1.5px solid var(--border);
