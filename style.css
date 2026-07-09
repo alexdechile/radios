@@ -115,8 +115,8 @@ html, body {
   cursor: pointer;
   font-family: 'Inter', sans-serif;
   font-weight: 700;
-  font-size: 0.65rem;
-  padding: 4px 8px;
+  font-size: 0.75rem;
+  padding: 6px 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -126,7 +126,7 @@ html, body {
   letter-spacing: 0.3px;
 }
 .btn-header i {
-  font-size: 0.8rem;
+  font-size: 1rem;
 }
 .btn-header:hover {
   background: rgba(255,255,255,0.4);
@@ -577,33 +577,33 @@ html, body {
 }
 
 .station-card-art {
-  height: 110px;
+  flex: 0 0 40%;
   display: flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, var(--lavender-light), var(--sky-light));
   position: relative;
   overflow: hidden;
-  flex-shrink: 0;
+  min-height: 0;
 }
 .station-card-art img {
-  width: 60px;
-  height: 60px;
-  border-radius: 12px;
+  width: 80px;
+  height: 80px;
+  border-radius: 16px;
   object-fit: contain;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12);
 }
 .station-card-art .placeholder-icon {
-  width: 60px;
-  height: 60px;
-  border-radius: 12px;
+  width: 80px;
+  height: 80px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--bg-card);
   color: var(--lavender);
-  font-size: 1.6rem;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  font-size: 2rem;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.10);
 }
 
 .station-card-body {
