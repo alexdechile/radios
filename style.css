@@ -511,6 +511,7 @@ html, body {
 
 .content-area {
   flex: 1;
+  min-height: 0;
   overflow: hidden;
   position: relative;
   background: var(--bg-soft);
@@ -541,7 +542,7 @@ html, body {
   display: flex;
   flex-direction: row;
   gap: 16px;
-  padding: 12px 52px;
+  padding: 12px 52px 20px;
   height: 100%;
   align-items: stretch;
   white-space: nowrap;
@@ -882,25 +883,36 @@ html, body {
 }
 
 .app-footer {
-  padding: 8px 14px;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
   display: flex;
   justify-content: space-between;
   align-items: center;
   background: var(--bg-card);
-  border-top: 1px solid var(--border);
+  border-top: 2px solid var(--border);
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.04);
+  position: relative;
+  z-index: 5;
+  flex-shrink: 0;
+}
+
+.app-footer-btns {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .btn-footer {
-  background: transparent;
+  background: var(--bg-soft);
   border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text-light);
-  font-size: 0.6rem;
-  font-weight: 600;
-  padding: 4px 10px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 5px 12px;
   cursor: pointer;
   font-family: 'Inter', sans-serif;
   transition: all 0.2s;
+  letter-spacing: 0.3px;
 }
 
 .btn-footer:hover {
