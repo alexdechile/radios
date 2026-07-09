@@ -617,7 +617,7 @@ html, body {
 }
 .station-name {
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 1.2rem;
   color: var(--text-primary);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -626,7 +626,7 @@ html, body {
   line-height: 1.3;
 }
 .station-tags {
-  font-size: 0.68rem;
+  font-size: 0.85rem;
   color: var(--text-light);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -689,11 +689,11 @@ html, body {
   flex-wrap: wrap;
 }
 .station-card-badges .badge {
-  font-size: 0.55rem;
-  padding: 2px 5px;
+  font-size: 0.7rem;
+  padding: 3px 7px;
   border-radius: 4px;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 1.3;
 }
 
 .btn-add-card, .btn-dismiss-card {
