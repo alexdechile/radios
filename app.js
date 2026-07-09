@@ -236,6 +236,7 @@ async function init() {
     tabPlaylist.classList.remove('active');
     sectionResults.classList.remove('hidden');
     sectionPlaylist.classList.add('hidden');
+    initCarousel();
   });
 
   tabPlaylist.addEventListener('click', () => {
@@ -589,6 +590,23 @@ function initEqPanel() {
   });
 }
 
+function initCarousel() {
+  const container = document.getElementById('resultsSection');
+  const cards = document.querySelectorAll('.station-card');
+
+  document.getElementById('carouselPrev').onclick = () => {
+    container.scrollBy({ left: -296, behavior: 'smooth' });
+  };
+  document.getElementById('carouselNext').onclick = () => {
+    container.scrollBy({ left: 296, behavior: 'smooth' });
+  };
+
+  const arrows = document.querySelectorAll('.carousel-arrow');
+  arrows.forEach(a => a.style.display = cards.length > 2 ? '' : 'none');
+}
+
+
+
 function triggerSearch() {
   const q = document.getElementById('searchInput').value.trim();
   if (q.length >= 2) search(q);
@@ -809,6 +827,7 @@ async function search(query) {
     const alreadyFavorited = finalMerged.filter(s => inPlaylistUuids.has(s.stationuuid || s.uuid));
 
     renderResults([...discoveryResults, ...alreadyFavorited].slice(0, 150));
+    setTimeout(initCarousel, 50);
   } catch {
     container.innerHTML = '<div class="status-msg error">Error al buscar. Intenta de nuevo.</div>'
       + '<div class="status-msg hint">💡 Tip: prueba "80s", "jazz", "rock", "disco", "electro"</div>';
@@ -846,6 +865,7 @@ async function deepSearch() {
       // Mark as deep
       data.forEach(s => s.is_web = true);
       renderResults(data, true); // true means append/prepend
+      setTimeout(initCarousel, 50);
       if (originalResults.includes('station-card')) {
         container.innerHTML += '<hr class="search-divider"><div class="status-msg">Resultados anteriores:</div>' + originalResults;
       }
@@ -876,11 +896,14 @@ function renderResults(stations, isAppend = false) {
     const country = s.country || '';
     const bitrate = s.bitrate || '';
     const codec = s.codec || '';
-    const homepage = s.homepage || '';
-    const language = s.language || '';
-    const state = s.state || '';
-    const clickcount = s.clickcount || '';
     const inPl = playlist.some((p) => p.uuid === uuid);
+
+    const tagList = tags ? tags.split(',').map(t => t.trim()).filter(Boolean).slice(0, 3) : [];
+    const badgeHtml = [
+      bitrate ? `<span class="badge badge-bitrate">${bitrate}k</span>` : '',
+      codec ? `<span class="badge badge-codec">${codec}</span>` : '',
+      country ? `<span class="badge badge-country">${country}</span>` : '',
+    ].filter(Boolean).join('');
 
     return `
       <div class="station-card ${s.is_web ? 'web-result' : ''}" 
@@ -892,39 +915,25 @@ function renderResults(stations, isAppend = false) {
         data-country="${escAttr(country)}"
         data-bitrate="${escAttr(bitrate)}"
         data-codec="${escAttr(codec)}"
-        data-homepage="${escAttr(homepage)}"
-        data-language="${escAttr(language)}"
-        data-state="${escAttr(state)}"
-        data-clickcount="${escAttr(clickcount)}"
       >
-        <div class="station-info">
+        <div class="station-card-art">
           ${favicon
-            ? `<img src="${escAttr(favicon)}" class="station-icon" alt="" loading="lazy" onerror="this.style.display='none'">`
-            : `<div class="station-icon-placeholder">${s.is_web ? '<i class="fas fa-globe"></i>' : '<i class="fas fa-radio"></i>'}</div>`
+            ? `<img src="${escAttr(favicon)}" alt="" loading="lazy" onerror="">`
+            : `<div class="placeholder-icon">${s.is_web ? '<i class="fas fa-globe"></i>' : '<i class="fas fa-radio"></i>'}</div>`
           }
-          <div>
-            <div class="station-name">
-              ${s.is_deep ? '<i class="fas fa-anchor text-azul mr-1" title="Deep Search"></i>' : ''}
-              ${s.is_web ? '<i class="fas fa-globe text-azul mr-1" title="Web Search"></i>' : ''}
-              ${name}
-            </div>
-            <div class="station-meta">
-              ${s.is_web ? '<span class="badge badge-web">Web Result</span>' : ''}
-              ${s.is_deep ? '<span class="badge badge-deep">Deep Search</span>' : ''}
-              ${tags ? `<span class="tag">${tags.split(',').slice(0, 3).join(', ')}</span>` : ''}
-              ${s.bitrate ? `<span class="badge badge-bitrate">${s.bitrate}k</span>` : ''}
-              ${s.codec ? `<span class="badge badge-codec">${s.codec}</span>` : ''}
-              ${s.country ? `<span class="badge badge-country">${s.country}</span>` : ''}
-            </div>
-          </div>
         </div>
-        <div class="station-actions">
-          <button class="btn btn-play" title="Reproducir"><i class="fas fa-play"></i></button>
+        <div class="station-card-body">
+          <div class="station-name">${name}</div>
+          ${tagList.length ? `<div class="station-tags">${tagList.join(', ')}</div>` : ''}
+        </div>
+        <div class="station-card-footer">
+          <button class="btn-play-card" title="Reproducir"><i class="fas fa-play"></i></button>
+          <div class="station-card-badges">${badgeHtml}</div>
           ${inPl
-            ? '<button class="btn btn-remove" title="Quitar de playlist"><i class="fas fa-heart-crack"></i></button>'
-            : '<button class="btn btn-add" title="Agregar a playlist"><i class="fas fa-plus"></i></button>'
+            ? `<button class="btn-add-card is-fav" title="Quitar de playlist"><i class="fas fa-heart"></i></button>`
+            : `<button class="btn-add-card" title="Agregar a playlist"><i class="fas fa-plus"></i></button>`
           }
-          <button class="btn btn-dismiss" title="Descartar de esta búsqueda"><i class="fas fa-eye-slash"></i></button>
+          <button class="btn-dismiss-card" title="Descartar"><i class="fas fa-eye-slash"></i></button>
         </div>
       </div>
     `;
@@ -1049,46 +1058,41 @@ async function startMetadataTracker(uuid) {
 
 /* ── Click on Results ── */
 function onResultsClick(e) {
-  const btn = e.target.closest('button');
-  if (!btn) return;
-
-  const card = btn.closest('[data-url]');
+  const card = e.target.closest('[data-url]');
   if (!card) return;
 
+  const btn = e.target.closest('button');
   const url = card.dataset.url;
   const name = card.dataset.name;
   const uuid = card.dataset.uuid;
 
-  if (btn.classList.contains('btn-play')) {
-    card.classList.add('playing');
-    play(url, name, uuid);
+  if (btn) {
+    if (btn.classList.contains('btn-add-card') && !btn.classList.contains('is-fav')) {
+      addToPlaylist({
+        uuid: card.dataset.uuid,
+        name: card.dataset.name,
+        url: card.dataset.url,
+        favicon: card.dataset.favicon || '',
+        tags: card.dataset.tags || '',
+        country: card.dataset.country || '',
+        bitrate: card.dataset.bitrate || '',
+        codec: card.dataset.codec || '',
+      });
+      return;
+    }
+    if (btn.classList.contains('btn-add-card') && btn.classList.contains('is-fav')) {
+      removeFromPlaylist(card.dataset.uuid);
+      return;
+    }
+    if (btn.classList.contains('btn-dismiss-card')) {
+      card.remove();
+      return;
+    }
   }
 
-  if (btn.classList.contains('btn-add')) {
-    const found = playlist.find((p) => p.uuid === card.dataset.uuid);
-    if (!found) addToPlaylist({
-      uuid: card.dataset.uuid,
-      name: card.dataset.name,
-      url: card.dataset.url,
-      favicon: card.dataset.favicon || '',
-      tags: card.dataset.tags || '',
-      country: card.dataset.country || '',
-      bitrate: card.dataset.bitrate || '',
-      codec: card.dataset.codec || '',
-      homepage: card.dataset.homepage || '',
-      language: card.dataset.language || '',
-      state: card.dataset.state || '',
-      clickcount: card.dataset.clickcount || '',
-    });
-  }
-
-  if (btn.classList.contains('btn-remove')) {
-    removeFromPlaylist(card.dataset.uuid);
-  }
-
-  if (btn.classList.contains('btn-dismiss')) {
-    card.remove();
-  }
+  document.querySelectorAll('.station-card.playing').forEach(el => el.classList.remove('playing'));
+  card.classList.add('playing');
+  play(url, name, uuid);
 }
 
 /* ── Click on Playlist ── */
@@ -1191,12 +1195,14 @@ function persistPlaylist() {
 function updateResultAddButton(uuid, added) {
   document.querySelectorAll('.station-card').forEach((card) => {
     if (card.dataset.uuid === uuid) {
-      const actions = card.querySelector('.station-actions');
-      const old = actions.querySelector('.btn-add, .btn-remove, .added-check');
-      if (old) {
-        old.outerHTML = added
-          ? '<button class="btn btn-remove" title="Quitar de playlist"><i class="fas fa-heart-crack"></i></button>'
-          : '<button class="btn btn-add" title="Agregar a playlist"><i class="fas fa-plus"></i></button>';
+      const footer = card.querySelector('.station-card-footer');
+      if (footer) {
+        const old = footer.querySelector('.btn-add-card');
+        if (old) {
+          old.outerHTML = added
+            ? '<button class="btn-add-card is-fav" title="Quitar de playlist"><i class="fas fa-heart"></i></button>'
+            : '<button class="btn-add-card" title="Agregar a playlist"><i class="fas fa-plus"></i></button>';
+        }
       }
     }
   });

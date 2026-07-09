@@ -490,9 +490,20 @@ html, body {
   background: var(--bg-soft);
 }
 
-.content-scroll {
+#resultsSection.content-scroll {
   height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0;
+  position: relative;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+#playlistSection.content-scroll {
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 8px;
 }
 
@@ -500,7 +511,175 @@ html, body {
 .content-scroll::-webkit-scrollbar-track { background: transparent; }
 .content-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-.station-card, .pl-item {
+.results-list {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  padding: 12px 52px;
+  height: 100%;
+  align-items: stretch;
+  white-space: nowrap;
+}
+
+.station-card {
+  flex: 0 0 280px;
+  width: 280px;
+  scroll-snap-align: start;
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.station-card:hover {
+  border-color: var(--lavender);
+  box-shadow: var(--shadow-hover);
+}
+
+.station-card-art {
+  height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--lavender-light), var(--sky-light));
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.station-card-art img {
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  object-fit: contain;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+}
+.station-card-art .placeholder-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card);
+  color: var(--lavender);
+  font-size: 1.6rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+
+.station-card-body {
+  flex: 1;
+  padding: 12px 14px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+.station-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.3;
+}
+.station-tags {
+  font-size: 0.68rem;
+  color: var(--text-light);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.station-card-footer {
+  padding: 6px 12px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.btn-play-card {
+  background: var(--sage-light);
+  border: 1.5px solid var(--sage);
+  border-radius: 8px;
+  color: var(--text-primary);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.btn-play-card:hover {
+  background: var(--sage);
+  color: white;
+}
+.station-card.playing .btn-play-card {
+  background: #FF6B35;
+  border-color: #FF6B35;
+  color: white;
+}
+
+.station-card-badges {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.station-card-badges .badge {
+  font-size: 0.55rem;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.btn-add-card, .btn-dismiss-card {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-light);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.65rem;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.btn-add-card:hover { border-color: var(--sky); color: var(--sky); background: var(--sky-light); }
+.btn-dismiss-card:hover { border-color: var(--text-light); color: var(--text-light); }
+.btn-add-card.is-fav { border-color: var(--pink); color: var(--pink); background: var(--pink-light); }
+
+.station-card.playing {
+  border-color: #FF6B35;
+  box-shadow: 0 0 16px rgba(255, 107, 53, 0.3);
+  animation: glow-pulse 1.8s ease-in-out infinite;
+}
+.station-card.playing .station-card-art {
+  background: linear-gradient(135deg, #FFF0E6, #FFE4D6);
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 16px rgba(255, 107, 53, 0.3); }
+  50% { box-shadow: 0 0 24px rgba(255, 107, 53, 0.5); }
+}
+
+
+
+.pl-item {
   background: var(--bg-card);
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
@@ -515,66 +694,13 @@ html, body {
   transition: all 0.2s;
 }
 
-.station-card:hover {
-  border-color: var(--lavender);
-  box-shadow: var(--shadow-hover);
-}
-
-.station-card.playing {
-  border-color: #FF6B35;
-  background: linear-gradient(135deg, #FFF0E6, #FFE4D6);
-  box-shadow: 0 0 16px rgba(255, 107, 53, 0.3), inset 0 0 0 1px rgba(255, 107, 53, 0.15);
-  animation: glow-pulse 1.8s ease-in-out infinite;
-}
-
-@keyframes glow-pulse {
-  0%, 100% { box-shadow: 0 0 16px rgba(255, 107, 53, 0.3), inset 0 0 0 1px rgba(255, 107, 53, 0.15); }
-  50% { box-shadow: 0 0 24px rgba(255, 107, 53, 0.5), inset 0 0 0 1px rgba(255, 107, 53, 0.25); }
-}
-
-.station-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  object-fit: contain;
-  flex-shrink: 0;
-}
-
-.station-icon-placeholder {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: var(--lavender-light);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--lavender);
-  font-size: 0.8rem;
-  flex-shrink: 0;
-}
-
-.station-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.station-name, .pl-name {
+.pl-name {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-weight: 600;
   font-size: 0.9rem;
   color: var(--text-primary);
-}
-
-.station-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 2px;
 }
 
 .badge {
@@ -609,6 +735,30 @@ html, body {
   color: #C49040;
 }
 
+.carousel-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  opacity: 0.7;
+}
+.carousel-arrow:hover { opacity: 1; border-color: var(--lavender); color: var(--lavender); }
+.carousel-arrow:active { transform: translateY(-50%) scale(0.95); }
+.carousel-arrow-left { left: 6px; }
+.carousel-arrow-right { right: 6px; }
+
 .tag {
   font-size: 0.6rem;
   color: var(--text-light);
@@ -618,6 +768,21 @@ html, body {
   display: flex;
   gap: 4px;
   flex-shrink: 0;
+}
+
+.pl-actions .btn {
+  background: var(--bg-soft);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s;
 }
 
 .btn {
@@ -1564,16 +1729,16 @@ html, body {
     font-size: 0.75rem;
   }
 
-  .station-card, .pl-item {
+  .pl-item {
     padding: 12px;
     min-height: 56px;
   }
 
-  .station-name, .pl-name {
+  .pl-name {
     font-size: 1rem;
   }
 
-  .btn {
+  .btn-play-card {
     width: 40px;
     height: 40px;
     font-size: 0.95rem;
@@ -1638,13 +1803,14 @@ html, body {
     padding: 6px 10px;
   }
 
-  .station-card, .pl-item {
+  .pl-item {
     padding: 8px;
     min-height: 44px;
   }
 
-  .btn {
+  .btn-play-card {
     width: 36px;
     height: 36px;
+    font-size: 0.9rem;
   }
 }

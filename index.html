@@ -175,18 +175,24 @@
         </div>
       </div>
 
-      <div class="content-area">
-        <div id="resultsSection" class="content-scroll">
-          <div id="results" class="results-list"></div>
-        </div>
-        <div id="playlistSection" class="content-scroll hidden">
-          <div class="pl-toolbar">
-            <button class="btn-pl-action" id="btnPlayAll" title="Reproducir todas"><i class="fas fa-play"></i> Todo</button>
-            <button class="btn-pl-action" id="btnShuffle" title="Aleatorio"><i class="fas fa-shuffle"></i></button>
+<div class="content-area">
+          <div id="resultsSection" class="content-scroll">
+            <div id="results" class="results-list"></div>
+            <button class="carousel-arrow carousel-arrow-left" id="carouselPrev">
+              <i class="fas fa-chevron-left"></i>
+            </button>
+            <button class="carousel-arrow carousel-arrow-right" id="carouselNext">
+              <i class="fas fa-chevron-right"></i>
+            </button>
           </div>
-          <div id="playlist" class="playlist-list"></div>
+          <div id="playlistSection" class="content-scroll hidden">
+            <div class="pl-toolbar">
+              <button class="btn-pl-action" id="btnPlayAll" title="Reproducir todas"><i class="fas fa-play"></i> Todo</button>
+              <button class="btn-pl-action" id="btnShuffle" title="Aleatorio"><i class="fas fa-shuffle"></i></button>
+            </div>
+            <div id="playlist" class="playlist-list"></div>
+          </div>
         </div>
-      </div>
 
       <div class="app-footer">
         <div class="app-footer-btns">
