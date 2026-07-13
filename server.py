@@ -48,6 +48,8 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
             self.handle_get_curated()
         elif self.path.startswith("/api/websearch"):
             self.handle_websearch()
+        elif self.path.startswith("/api/nowplaying"):
+            self.handle_nowplaying()
         elif self.path.startswith("/proxy"):
             self.handle_proxy()
         else:
@@ -192,6 +194,211 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
         print(f"Deep Web Search for: {query}", file=sys.stderr)
         results = self.perform_web_search(query)
         self.send_json(results)
+
+    def handle_nowplaying(self):
+        parsed_path = urllib.parse.urlparse(self.path)
+        query_params = urllib.parse.parse_qs(parsed_path.query)
+        target_url = query_params.get("url", [""])[0]
+
+        if not target_url:
+            self.send_json({"title": None, "error": "Missing url parameter"})
+            return
+
+        # 1) Try ICY peek (most reliable for SHOUTcast/Icecast)
+        try:
+            title = self._peek_icy_metadata(target_url)
+            if title:
+                self.send_json({"title": title, "source": "icy_peek"})
+                return
+        except Exception as e:
+            print(f"[NOWPLAYING] ICY peek error for {target_url}: {e}", file=sys.stderr)
+
+        # 2) Try common HTTP metadata endpoints
+        try:
+            parsed = urllib.parse.urlparse(target_url)
+            base = f"{parsed.scheme}://{parsed.netloc}"
+        except Exception:
+            self.send_json({"title": None, "error": "Invalid URL"})
+            return
+
+        endpoints = [
+            "/7.html",
+            "/currentsong",
+            "/stats?json=1",
+            "/status.xsl",
+        ]
+
+        for ep in endpoints:
+            try:
+                url = base + ep
+                req = urllib.request.Request(
+                    url,
+                    headers={
+                        "User-Agent": "RadiosApp/1.0",
+                        "Icy-MetaData": "1",
+                    },
+                )
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    body = resp.read().decode("utf-8", errors="replace").strip()
+
+                title = self._parse_metadata(body, ep)
+                if title:
+                    self.send_json({"title": title, "source": ep})
+                    return
+            except Exception:
+                continue
+
+        self.send_json({"title": None})
+
+    def _parse_metadata(self, body, endpoint):
+        if not body:
+            return None
+
+        try:
+            if endpoint == "/7.html":
+                # Reject if it looks like HTML
+                if "<" in body and ">" in body:
+                    return None
+                # Format: listeners,status,peak,song_title or similar
+                parts = body.split(",")
+                if len(parts) >= 4:
+                    song = ",".join(parts[3:]).strip()
+                    if song and song != "-" and song != "":
+                        return song
+                if len(parts) == 1 and body not in ("-", ""):
+                    return body
+
+            elif endpoint == "/currentsong":
+                # Just raw song title
+                if body and body != "-":
+                    # Strip any HTML tags
+                    clean = re.sub(r"<[^>]+>", "", body).strip()
+                    return clean if clean else None
+
+            elif endpoint == "/stats?json=1":
+                # Icecast JSON stats
+                data = json.loads(body)
+                for key in ("title", "song_title", "current_song", "song"):
+                    val = data.get(key)
+                    if val and val != "-":
+                        return val
+                # Also check inside source
+                for src in data.get("source", []):
+                    for key in ("title", "song_title", "current_song", "song"):
+                        val = src.get(key) if isinstance(src, dict) else None
+                        if val and val != "-":
+                            return val
+
+            elif endpoint == "/status.xsl":
+                # Try to find title in XML
+                m = re.search(r"<title[^>]*>([^<]+)</title>", body, re.IGNORECASE)
+                if m:
+                    val = m.group(1).strip()
+                    return val if val and val != "-" else None
+                # Try song in the XML
+                m = re.search(r"<song[^>]*>([^<]+)</song>", body, re.IGNORECASE)
+                if m:
+                    val = m.group(1).strip()
+                    return val if val and val != "-" else None
+        except Exception:
+            return None
+
+        return None
+
+    def _peek_icy_metadata(self, stream_url):
+        """Quick peek at the stream for ICY metadata without proxying audio."""
+        import sys as _sys
+
+        parsed = urllib.parse.urlparse(stream_url)
+        host = parsed.hostname
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        path = parsed.path or "/"
+        if parsed.query:
+            path += "?" + parsed.query
+
+        s = socket.create_connection((host, port), timeout=8)
+        try:
+            if parsed.scheme == "https":
+                import ssl
+
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                s = ctx.wrap_socket(s, server_hostname=host)
+
+            req = (
+                f"GET {path} HTTP/1.0\r\n"
+                f"Host: {host}\r\n"
+                f"User-Agent: RadiosApp/1.0\r\n"
+                f"Icy-MetaData: 1\r\n"
+                f"Accept: */*\r\n"
+                f"\r\n"
+            )
+            s.sendall(req.encode())
+
+            # Read status + headers until blank line
+            resp_raw = b""
+            while True:
+                chunk = s.recv(4096)
+                if not chunk:
+                    break
+                resp_raw += chunk
+                if b"\r\n\r\n" in resp_raw:
+                    break
+
+            header_part = resp_raw[: resp_raw.find(b"\r\n\r\n")]
+            header_text = header_part.decode("utf-8", errors="replace")
+
+            headers = {}
+            for line in header_text.split("\r\n"):
+                if ":" in line:
+                    k, v = line.split(":", 1)
+                    headers[k.strip().lower()] = v.strip()
+
+            meta_int = headers.get("icy-metaint")
+            if not meta_int:
+                return None
+
+            meta_int = int(meta_int)
+
+            # Skip audio data up to first metadata block
+            body_start = resp_raw.find(b"\r\n\r\n") + 4
+            body_data = resp_raw[body_start:]
+            need_audio = meta_int - len(body_data)
+            if need_audio > 0:
+                while need_audio > 0:
+                    chunk = s.recv(min(need_audio, 8192))
+                    if not chunk:
+                        break
+                    need_audio -= len(chunk)
+
+            # Read metadata block length byte
+            meta_len_byte = s.recv(1)
+            if not meta_len_byte:
+                return None
+            meta_block_size = meta_len_byte[0] * 16
+            if meta_block_size == 0:
+                return None
+
+            # Read full metadata block (might come in multiple recv calls)
+            meta_data = b""
+            while len(meta_data) < meta_block_size:
+                chunk = s.recv(meta_block_size - len(meta_data))
+                if not chunk:
+                    break
+                meta_data += chunk
+
+            meta_str = meta_data.decode("utf-8", errors="replace")
+            m = re.search(r"StreamTitle='([^']*)'", meta_str, re.IGNORECASE)
+            if m:
+                title = m.group(1).strip()
+                return title if title else None
+            return None
+        finally:
+            try:
+                s.close()
+            except Exception:
+                pass
 
     def send_json(self, data, status=200):
         try:

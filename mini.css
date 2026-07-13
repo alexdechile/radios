@@ -699,6 +699,41 @@ body {
   margin-top: 1px;
 }
 
+.mini-nowplaying-track {
+  font-size: 0.62rem;
+  color: #60e960;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+  text-shadow: 0 0 4px rgba(96,233,96,0.3);
+  animation: miniNpFade 0.3s ease;
+}
+
+.mini-nowplaying-track.hidden {
+  display: none !important;
+}
+
+@keyframes miniNpFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.mini-nowplaying-track i {
+  animation: miniNpPulse 2s infinite ease-in-out;
+  flex-shrink: 0;
+  font-size: 0.55rem;
+}
+
+@keyframes miniNpPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 .player-status-badge {
   background-color: var(--peach-light);
   color: #c98818;
@@ -818,4 +853,186 @@ body {
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid var(--border);
+}
+
+/* ── Mini Effects Panel ── */
+.mini-effects-panel {
+  background: linear-gradient(180deg, #1a2e1a, #162116);
+  border-bottom: 2px solid #60e960;
+  padding: 8px 12px;
+  animation: miniFxSlide 0.2s ease;
+}
+
+.mini-effects-panel.hidden {
+  display: none !important;
+}
+
+@keyframes miniFxSlide {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.mini-effects-header {
+  color: #60e960;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  text-shadow: 0 0 6px rgba(96,233,96,0.5);
+}
+
+.mini-effects-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mini-effect-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mini-effect-label {
+  color: rgba(255,255,255,0.8);
+  font-size: 0.65rem;
+  font-weight: 600;
+  min-width: 60px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mini-effect-label i {
+  color: rgba(96,233,96,0.7);
+  font-size: 0.65rem;
+  width: 14px;
+}
+
+.mini-effect-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 4px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  max-width: 120px;
+}
+
+.mini-effect-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #60e960, #4ac94a);
+  border: 2px solid rgba(255,255,255,0.3);
+  cursor: pointer;
+}
+
+.mini-effect-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #60e960;
+  border: 2px solid rgba(255,255,255,0.3);
+  cursor: pointer;
+}
+
+.mini-effect-value {
+  color: #60e960;
+  font-size: 0.55rem;
+  font-weight: 700;
+  font-family: 'Inter', monospace;
+  min-width: 28px;
+  text-align: right;
+}
+
+.mini-effect-toggle {
+  position: relative;
+  display: inline-flex;
+  width: 32px;
+  height: 18px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.mini-effect-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.mini-effect-toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.15);
+  border-radius: 9px;
+  transition: background 0.2s;
+}
+
+.mini-effect-toggle-slider::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.5);
+  transition: transform 0.2s, background 0.2s;
+}
+
+.mini-effect-toggle input:checked + .mini-effect-toggle-slider {
+  background: rgba(96,233,96,0.4);
+}
+
+.mini-effect-toggle input:checked + .mini-effect-toggle-slider::before {
+  transform: translateX(14px);
+  background: #60e960;
+}
+
+.mini-effect-toggle-label {
+  color: rgba(255,255,255,0.4);
+  font-size: 0.5rem;
+  font-weight: 700;
+  min-width: 20px;
+}
+
+.mini-effect-toggle input:checked ~ .mini-effect-toggle-label {
+  color: #60e960;
+}
+
+/* ── Mini header active state for effects ── */
+#btnMiniEffectsToggle.active {
+  background: rgba(96,233,96,0.3) !important;
+  color: #60e960 !important;
+  border-color: rgba(96,233,96,0.5) !important;
+}
+
+.btn-mini-effects-reset {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(96,233,96,0.3);
+  border-radius: 4px;
+  color: #60e960;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-left: auto;
+}
+
+.btn-mini-effects-reset:active {
+  background: rgba(96,233,96,0.2);
+  border-color: #60e960;
 }

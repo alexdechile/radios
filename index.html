@@ -48,6 +48,7 @@
           <button class="btn-header" id="btnCopyPlaylist" title="Copiar playlist al portapapeles"><i class="fas fa-clipboard"></i></button>
           <button class="btn-header" id="btnMobileVersion" title="Versión Móvil"><i class="fas fa-mobile-screen-button"></i></button>
           <button class="btn-header" id="btnEqToggle" title="Ecualizador"><i class="fas fa-sliders"></i></button>
+          <button class="btn-header" id="btnEffectsToggle" title="Efectos de Audio"><i class="fas fa-wand-magic-sparkles"></i></button>
           <button class="btn-header" id="btnHardRefresh" title="Actualizar"><i class="fas fa-rotate"></i></button>
         </div>
       </div>
@@ -84,6 +85,10 @@
         </div>
 
         <div class="now-playing" id="radioDisplay">Radios App — Listo para sintonizar...</div>
+        <div class="now-playing-track hidden" id="nowPlayingTrack">
+          <span class="npt-icon"><i class="fas fa-music"></i></span>
+          <span class="npt-text" id="nowPlayingTrackText"></span>
+        </div>
 
         <div class="search-bar">
           <div class="search-wrapper">
@@ -156,6 +161,49 @@
               <div class="eq-center-line"></div>
             </div>
             <div class="eq-band-value" id="eqVal4">0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Effects Panel -->
+      <div id="effectsPanel" class="effects-panel hidden">
+        <div class="effects-header">
+          <span class="effects-title"><i class="fas fa-wand-magic-sparkles"></i> Efectos de Audio</span>
+          <button class="btn-effects-reset" id="btnEffectsReset" title="Resetear todos los efectos">Normal</button>
+        </div>
+        <div class="effects-body">
+          <div class="effect-row">
+            <div class="effect-label">
+              <i class="fas fa-arrows-left-right"></i> Stereo Width
+            </div>
+            <div class="effect-control">
+              <input type="range" id="stereoWidthSlider" class="effect-slider" min="0" max="200" value="100" step="1">
+              <span class="effect-value" id="stereoWidthVal">100%</span>
+            </div>
+          </div>
+          <div class="effect-row">
+            <div class="effect-label">
+              <i class="fas fa-expand"></i> Surround
+            </div>
+            <div class="effect-control">
+              <label class="effect-toggle">
+                <input type="checkbox" id="surroundToggle">
+                <span class="effect-toggle-slider"></span>
+              </label>
+              <span class="effect-toggle-label" id="surroundStatus">OFF</span>
+            </div>
+          </div>
+          <div class="effect-row">
+            <div class="effect-label">
+              <i class="fas fa-bolt"></i> Bass Boost
+            </div>
+            <div class="effect-control">
+              <label class="effect-toggle">
+                <input type="checkbox" id="bassBoostToggle">
+                <span class="effect-toggle-slider"></span>
+              </label>
+              <span class="effect-toggle-label" id="bassBoostStatus">OFF</span>
+            </div>
           </div>
         </div>
       </div>

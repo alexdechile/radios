@@ -1,6 +1,15 @@
 # Radios App - DonAlex Homelab
 
 ## Último Realizado
+- [x] **Descubrimiento Dinámico de Servidores de API**:
+  - Implementado un mecanismo de resolución dinámica de servidores activos consultando `all.api.radio-browser.info/json/servers` en `pickServer()` para `app.js` y `mini.js`.
+  - Esto previene errores de resolución DNS (`net::ERR_NAME_NOT_RESOLVED`) y limpia la consola del navegador al evitar peticiones de sondeo a servidores dados de baja o fuera de servicio temporalmente (como `at1`, `de2` o `nl1`).
+- [x] **Corrección de Service Worker (`sw.js`)**:
+  - Restringido el interceptor de peticiones `fetch` del Service Worker solo a URLs del mismo origen (`same-origin`), evitando interferir con APIs y flujos de audio externos (como `radio-browser.info`).
+  - Implementado un fallback graceful (`new Response` con estado 503) cuando una petición local falla y no se encuentra en el caché, eliminando el error `Uncaught (in promise) TypeError: Failed to convert value to 'Response'` en la consola del navegador.
+- [x] **Corrección de deprecación de sliders y rutas de API (Nginx subpath)**:
+  - Reemplazado `slider-vertical` por `none` en `appearance` de `style.css` (usando el estándar `writing-mode: vertical-lr; direction: rtl;`) para eliminar advertencias de Chrome.
+  - Creada función `getApiUrl` en `app.js` y `mini.js` para resolver dinámicamente las llamadas API (`/api/curated`, `/api/nowplaying`, `/api/websearch`) agregando el prefijo `/radios` si se accede bajo esa ruta proxy, eliminando los errores 404.
 - [x] **Versión Móvil Compacta (Radios Mini)** — Implementación de una interfaz fluida, ultra responsiva y ligera en `mini.html` optimizada para el iPhone 6 (pantallas pequeñas y Safari Móvil). Incluye autodetección y redirección desde la versión clásica, buscador integrado con filtros, sincronización de la playlist/favoritos vía `localStorage` y reproductor nativo HTML5 en segundo plano (sticky footer) con control táctil optimizado y navegación (Prev/Next) entre la lista activa. Se puede alternar libremente con el botón de Versión Clásica/Versión Móvil en las cabeceras.
 - [x] Implementación de temporizador de apagado automático (Sleep Timer) con presets de 15, 30, 45, 60 minutos y personalizado.
 - [x] Implementación de despertador / alarma programable con selección de estación de radio de la playlist.

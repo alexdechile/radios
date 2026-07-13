@@ -6,6 +6,13 @@
 const API_SERVERS = ['de1', 'de2', 'nl1', 'at1'];
 const UA = 'RadiosMiniApp/1.0';
 const STORE_KEY = 'radios_playlist';
+
+// Resolve API path relative to base path (handles /radios subpath on production)
+function getApiUrl(path) {
+  const prefix = window.location.pathname.startsWith('/radios') ? '/radios' : '';
+  const cleanPath = path.startsWith('/') ? path : '/' + path;
+  return prefix + cleanPath;
+}
 const SPONSORED_STATIONS = [
   {
     uuid: 'sponsored-1',
@@ -36,6 +43,21 @@ let cachedServer = null;
 let currentStation = null;
 let activeQueue = []; // currently active queue for Prev/Next (either playlist or searchResults)
 let activeTab = 'results'; // 'results' or 'playlist'
+
+// Auto-skip state
+let miniAutoSkipCount = 0;
+let miniAutoSkipTimer = null;
+
+// Now-playing poll interval
+let miniNowPlayingInterval = null;
+
+// Audio Effects state
+let miniAudioCtx = null;
+let miniEffectsActive = false;
+let miniEffectsInjected = false;
+let miniStereoWidthNode = null;
+let miniSurroundNode = null;
+let miniBassBoostFilter = null;
 
 // Initializer
 document.addEventListener('DOMContentLoaded', async () => {
@@ -94,6 +116,59 @@ function setupEventListeners() {
   // Export/Import JSON
   document.getElementById('btnMiniExportJSON')?.addEventListener('click', () => exportMiniPlaylist());
   document.getElementById('btnMiniImportJSON')?.addEventListener('click', () => importMiniPlaylist());
+
+  // Effects Toggle
+  document.getElementById('btnMiniEffectsToggle')?.addEventListener('click', () => {
+    toggleMiniEffects();
+  });
+
+  // Stereo Width slider
+  document.getElementById('miniStereoWidthSlider')?.addEventListener('input', () => {
+    const slider = document.getElementById('miniStereoWidthSlider');
+    const valEl = document.getElementById('miniStereoWidthVal');
+    const val = parseInt(slider.value);
+    if (valEl) valEl.textContent = val + '%';
+    updateMiniStereoWidth(val);
+  });
+
+  // Surround toggle
+  document.getElementById('miniSurroundToggle')?.addEventListener('change', () => {
+    const toggle = document.getElementById('miniSurroundToggle');
+    const status = document.getElementById('miniSurroundStatus');
+    const on = toggle.checked;
+    if (status) status.textContent = on ? 'ON' : 'OFF';
+    updateMiniSurround(on);
+  });
+
+  // Bass Boost toggle
+  document.getElementById('miniBassBoostToggle')?.addEventListener('change', () => {
+    const toggle = document.getElementById('miniBassBoostToggle');
+    const status = document.getElementById('miniBassBoostStatus');
+    const on = toggle.checked;
+    if (status) status.textContent = on ? 'ON' : 'OFF';
+    updateMiniBassBoost(on);
+  });
+
+  // Reset all effects to Normal
+  document.getElementById('btnMiniEffectsReset')?.addEventListener('click', () => {
+    const swSlider = document.getElementById('miniStereoWidthSlider');
+    const swVal = document.getElementById('miniStereoWidthVal');
+    if (swSlider) swSlider.value = '100';
+    if (swVal) swVal.textContent = '100%';
+    updateMiniStereoWidth(100);
+
+    const surrToggle = document.getElementById('miniSurroundToggle');
+    const surrStatus = document.getElementById('miniSurroundStatus');
+    if (surrToggle) surrToggle.checked = false;
+    if (surrStatus) surrStatus.textContent = 'OFF';
+    updateMiniSurround(false);
+
+    const bassToggle = document.getElementById('miniBassBoostToggle');
+    const bassStatus = document.getElementById('miniBassBoostStatus');
+    if (bassToggle) bassToggle.checked = false;
+    if (bassStatus) bassStatus.textContent = 'OFF';
+    updateMiniBassBoost(false);
+  });
 
   // Tab switching
   const tabs = document.querySelectorAll('.mini-tabs .tab-btn');
@@ -216,6 +291,7 @@ function setupEventListeners() {
     setPlayerStatus('ERROR STREAM', 'error');
     btnPlay.innerHTML = '<i class="fas fa-play"></i>';
     btnPlay.classList.remove('playing');
+    handleMiniPlaybackError();
   });
 
   // Simple progress animation for visual feedback (since stream is infinite, we simulate dynamic bar)
@@ -252,19 +328,37 @@ async function pickServer() {
     cachedServer = null;
   }
 
-  const shuffled = [...API_SERVERS].sort(() => Math.random() - 0.5);
+  // Resolve active servers dynamically from all.api.radio-browser.info
+  let activeServers = ['de1.api.radio-browser.info', 'de2.api.radio-browser.info'];
+  try {
+    const res = await fetch('https://all.api.radio-browser.info/json/servers', {
+      headers: { 'User-Agent': UA }
+    });
+    if (res.ok) {
+      const list = await res.json();
+      if (Array.isArray(list) && list.length > 0) {
+        activeServers = [...new Set(list.map(s => s.name))];
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to fetch active servers list, using fallback:', e);
+  }
+
+  const shuffled = activeServers.sort(() => Math.random() - 0.5);
   for (const s of shuffled) {
+    const hostname = s.includes('.api.radio-browser.info') ? s : `${s}.api.radio-browser.info`;
     try {
-      const res = await fetch(`https://${s}.api.radio-browser.info/json/stations/search?name=test&limit=1&hidebroken=true`, {
+      const res = await fetch(`https://${hostname}/json/stations/search?name=test&limit=1&hidebroken=true`, {
         headers: { 'User-Agent': UA }
       });
       if (res.ok) {
-        cachedServer = s;
-        return s;
+        const prefix = hostname.split('.')[0];
+        cachedServer = prefix;
+        return prefix;
       }
     } catch {}
   }
-  return null;
+  return 'de1';
 }
 
 // Perform Search (Fully aligned with app.js)
@@ -623,6 +717,10 @@ function updateFavBadge() {
 function playStation(station) {
   if (!station || !station.url) return;
 
+  // Reset auto-skip on manual play
+  miniAutoSkipCount = 0;
+  if (miniAutoSkipTimer) { clearTimeout(miniAutoSkipTimer); miniAutoSkipTimer = null; }
+
   currentStation = station;
   localStorage.setItem('mini_last_station', JSON.stringify(station));
   
@@ -644,8 +742,42 @@ function playStation(station) {
       const btnPlay = document.getElementById('btnMiniPlay');
       btnPlay.innerHTML = '<i class="fas fa-play"></i>';
       btnPlay.classList.remove('playing');
+      handleMiniPlaybackError();
     });
   }
+
+  // Start now-playing polling
+  fetchMiniNowPlaying(station.url);
+}
+
+/* ── Mini Now Playing ── */
+function fetchMiniNowPlaying(stationUrl) {
+  if (miniNowPlayingInterval) {
+    clearInterval(miniNowPlayingInterval);
+    miniNowPlayingInterval = null;
+  }
+
+  const doFetch = async () => {
+    if (!stationUrl) return;
+    const trackEl = document.getElementById('miniNowPlayingTrack');
+    const trackText = document.getElementById('miniNowPlayingText');
+    if (!trackEl || !trackText) return;
+    try {
+      const res = await fetch(getApiUrl(`/api/nowplaying?url=${encodeURIComponent(stationUrl)}`));
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.title) {
+          trackText.textContent = data.title;
+          trackEl.classList.remove('hidden');
+        } else {
+          trackEl.classList.add('hidden');
+        }
+      }
+    } catch {}
+  };
+
+  doFetch();
+  miniNowPlayingInterval = setInterval(doFetch, 15000);
 }
 
 // Update visual play/pause/active states in cards
@@ -698,6 +830,123 @@ function playNeighbor(direction) {
   }
 }
 
+function handleMiniPlaybackError() {
+  if (miniAutoSkipTimer) return;
+  if (activeQueue.length === 0) {
+    activeQueue = activeTab === 'results' ? searchResults : playlist;
+  }
+  if (activeQueue.length > 0) {
+    if (miniAutoSkipCount >= activeQueue.length) {
+      console.warn('[AUTO-SKIP] All stations failed, stopping.');
+      setPlayerStatus('TODO FALLARON', 'error');
+      return;
+    }
+    miniAutoSkipCount++;
+    setPlayerStatus('SALTANDO...', 'loading');
+    miniAutoSkipTimer = setTimeout(() => {
+      miniAutoSkipTimer = null;
+      playNeighbor(1);
+    }, 1500);
+  }
+}
+
+/* ── Mini Audio Effects ── */
+function initMiniEffectsChain() {
+  if (miniAudioCtx && miniEffectsInjected) return;
+  if (!audio) return;
+
+  try {
+    miniAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = miniAudioCtx.createMediaElementSource(audio);
+
+    // Stereo Width
+    const swSplitter = miniAudioCtx.createChannelSplitter(2);
+    const swGL = miniAudioCtx.createGain();
+    const swGR = miniAudioCtx.createGain();
+    const swGXL = miniAudioCtx.createGain();
+    const swGXR = miniAudioCtx.createGain();
+    const swMerger = miniAudioCtx.createChannelMerger(2);
+    const savedW = parseFloat(localStorage.getItem('mini_fx_stereo_width') || '100');
+    const wN = savedW / 100;
+    swGL.gain.value = (1 + wN) / 2;
+    swGR.gain.value = (1 + wN) / 2;
+    swGXL.gain.value = (1 - wN) / 2;
+    swGXR.gain.value = (1 - wN) / 2;
+    swSplitter.connect(swGL, 0, 0);
+    swSplitter.connect(swGXR, 1, 0);
+    swGL.connect(swMerger, 0, 0);
+    swGXR.connect(swMerger, 0, 0);
+    swSplitter.connect(swGXL, 0, 0);
+    swSplitter.connect(swGR, 1, 0);
+    swGXL.connect(swMerger, 0, 1);
+    swGR.connect(swMerger, 0, 1);
+    miniStereoWidthNode = { gains: [swGL, swGR, swGXL, swGXR], merger: swMerger };
+
+    // Surround
+    const srSplitter = miniAudioCtx.createChannelSplitter(2);
+    const srDelay = miniAudioCtx.createDelay(0.1);
+    srDelay.delayTime.value = localStorage.getItem('mini_fx_surround') === 'true' ? 0.025 : 0.001;
+    const srMerger = miniAudioCtx.createChannelMerger(2);
+    srSplitter.connect(srDelay, 0, 0);
+    srDelay.connect(srMerger, 0, 0);
+    srSplitter.connect(srMerger, 1, 1);
+    miniSurroundNode = { splitter: srSplitter, delay: srDelay, merger: srMerger };
+
+    // Bass Boost
+    miniBassBoostFilter = miniAudioCtx.createBiquadFilter();
+    miniBassBoostFilter.type = 'lowshelf';
+    miniBassBoostFilter.frequency.value = 80;
+    miniBassBoostFilter.Q.value = 0.8;
+    miniBassBoostFilter.gain.value = localStorage.getItem('mini_fx_bass_boost') === 'true' ? 6 : 0;
+
+    // Connect chain
+    source.connect(swSplitter);
+    swMerger.connect(srSplitter);
+    srMerger.connect(miniBassBoostFilter);
+    miniBassBoostFilter.connect(miniAudioCtx.destination);
+
+    miniEffectsInjected = true;
+  } catch (e) {
+    console.warn('Mini effects chain init failed:', e);
+    miniAudioCtx = null;
+    miniEffectsInjected = false;
+  }
+}
+
+function updateMiniStereoWidth(percent) {
+  if (!miniStereoWidthNode) return;
+  const wN = percent / 100;
+  miniStereoWidthNode.gains[0].gain.value = (1 + wN) / 2;
+  miniStereoWidthNode.gains[1].gain.value = (1 + wN) / 2;
+  miniStereoWidthNode.gains[2].gain.value = (1 - wN) / 2;
+  miniStereoWidthNode.gains[3].gain.value = (1 - wN) / 2;
+  localStorage.setItem('mini_fx_stereo_width', percent);
+}
+
+function updateMiniSurround(enabled) {
+  if (!miniSurroundNode) return;
+  miniSurroundNode.delay.delayTime.value = enabled ? 0.025 : 0.001;
+  localStorage.setItem('mini_fx_surround', enabled);
+}
+
+function updateMiniBassBoost(enabled) {
+  if (!miniBassBoostFilter) return;
+  miniBassBoostFilter.gain.value = enabled ? 6 : 0;
+  localStorage.setItem('mini_fx_bass_boost', enabled);
+}
+
+function toggleMiniEffects() {
+  const panel = document.getElementById('miniEffectsPanel');
+  const btn = document.getElementById('btnMiniEffectsToggle');
+  miniEffectsActive = !miniEffectsActive;
+  panel.classList.toggle('hidden', !miniEffectsActive);
+  btn.classList.toggle('active', miniEffectsActive);
+
+  if (miniEffectsActive) {
+    initMiniEffectsChain();
+  }
+}
+
 // Save Playlist
 function savePlaylist() {
   localStorage.setItem(STORE_KEY, JSON.stringify(playlist));
@@ -706,7 +955,7 @@ function savePlaylist() {
 /* ── SQLite Curated Radios Sync ── */
 async function syncCuratedFromServer() {
   try {
-    const res = await fetch('/api/curated');
+    const res = await fetch(getApiUrl('/api/curated'));
     if (res.ok) {
       const serverList = await res.json();
       if (Array.isArray(serverList) && serverList.length > 0) {
@@ -733,7 +982,7 @@ async function syncCuratedFromServer() {
 
 async function syncCuratedToServer(station) {
   try {
-    await fetch('/api/curated', {
+    await fetch(getApiUrl('/api/curated'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(station),
@@ -745,7 +994,7 @@ async function syncCuratedToServer(station) {
 
 async function removeCuratedFromServer(uuid) {
   try {
-    await fetch(`/api/curated?uuid=${encodeURIComponent(uuid)}`, { method: 'DELETE' });
+    await fetch(getApiUrl(`/api/curated?uuid=${encodeURIComponent(uuid)}`), { method: 'DELETE' });
   } catch (e) {
     console.warn('SQLite remove from server failed:', e);
   }

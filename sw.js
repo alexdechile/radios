@@ -32,9 +32,22 @@ self.addEventListener('activate', (e) => {
 
 // Fetch: Network first, then cache (to ensure updates are seen)
 self.addEventListener('fetch', (e) => {
-  e.respondWith(
-    fetch(e.request).catch(() => {
-      return caches.match(e.request);
-    })
-  );
+  if (e.request.method !== 'GET') return;
+
+  const url = new URL(e.request.url);
+  // Only handle same-origin requests
+  if (url.origin === self.location.origin) {
+    e.respondWith(
+      fetch(e.request).catch(() => {
+        return caches.match(e.request).then((cached) => {
+          if (cached) return cached;
+          return new Response('Network error', {
+            status: 503,
+            statusText: 'Service Unavailable',
+            headers: { 'Content-Type': 'text/plain' }
+          });
+        });
+      })
+    );
+  }
 });

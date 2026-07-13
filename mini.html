@@ -23,6 +23,7 @@
       <div class="header-actions">
         <button class="btn-header-mini" id="btnMiniExportJSON"><i class="fas fa-download"></i></button>
         <button class="btn-header-mini" id="btnMiniImportJSON"><i class="fas fa-upload"></i></button>
+        <button class="btn-header-mini" id="btnMiniEffectsToggle" title="Efectos de Audio"><i class="fas fa-wand-magic-sparkles"></i></button>
         <button class="btn-classic-mode" id="btnClassicMode" title="Versión Clásica">
           <i class="fas fa-desktop"></i>
         </button>
@@ -54,6 +55,37 @@
         </div>
       </div>
     </section>
+
+    <!-- Effects Panel -->
+    <div id="miniEffectsPanel" class="mini-effects-panel hidden">
+      <div class="mini-effects-header">
+        <i class="fas fa-wand-magic-sparkles"></i> Efectos
+        <button class="btn-mini-effects-reset" id="btnMiniEffectsReset">Normal</button>
+      </div>
+      <div class="mini-effects-body">
+        <div class="mini-effect-row">
+          <span class="mini-effect-label"><i class="fas fa-arrows-left-right"></i> Width</span>
+          <input type="range" id="miniStereoWidthSlider" class="mini-effect-slider" min="0" max="200" value="100" step="1">
+          <span class="mini-effect-value" id="miniStereoWidthVal">100%</span>
+        </div>
+        <div class="mini-effect-row">
+          <span class="mini-effect-label"><i class="fas fa-expand"></i> Surround</span>
+          <label class="mini-effect-toggle">
+            <input type="checkbox" id="miniSurroundToggle">
+            <span class="mini-effect-toggle-slider"></span>
+          </label>
+          <span class="mini-effect-toggle-label" id="miniSurroundStatus">OFF</span>
+        </div>
+        <div class="mini-effect-row">
+          <span class="mini-effect-label"><i class="fas fa-bolt"></i> Bass</span>
+          <label class="mini-effect-toggle">
+            <input type="checkbox" id="miniBassBoostToggle">
+            <span class="mini-effect-toggle-slider"></span>
+          </label>
+          <span class="mini-effect-toggle-label" id="miniBassBoostStatus">OFF</span>
+        </div>
+      </div>
+    </div>
 
     <!-- Navigation Tabs -->
     <nav class="mini-tabs">
@@ -96,6 +128,10 @@
         <div class="player-info">
           <div class="now-playing-title" id="nowPlayingTitle">Radios Mini — Sintoniza una radio</div>
           <div class="now-playing-sub" id="nowPlayingSub">Selecciona una emisora de la lista</div>
+          <div class="mini-nowplaying-track hidden" id="miniNowPlayingTrack">
+            <i class="fas fa-music"></i>
+            <span id="miniNowPlayingText"></span>
+          </div>
         </div>
         <div class="player-status-badge" id="playerStatusText">DETENIDO</div>
       </div>

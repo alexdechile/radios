@@ -9,6 +9,13 @@ const STORE_KEY = 'radios_playlist';
 const HISTORY_KEY = 'radios_search_history';
 const APP_VERSION = '1.3.1';
 
+// Resolve API path relative to base path (handles /radios subpath on production)
+function getApiUrl(path) {
+  const prefix = window.location.pathname.startsWith('/radios') ? '/radios' : '';
+  const cleanPath = path.startsWith('/') ? path : '/' + path;
+  return prefix + cleanPath;
+}
+
 // Radios patrocinadas que SIEMPRE aparecen al iniciar
 const SPONSORED_STATIONS = [
   {
@@ -37,10 +44,18 @@ let searchHistory = [];
 let deepDb = [];
 let cachedServer = null;
 let metadataInterval = null;
+let nowPlayingInterval = null;
 let audioCtx = null;
 let analyser = null;
 let eqFilters = [];   // 5 BiquadFilter nodes
 let eqActive = false; // panel open state
+
+// Audio Effects state
+let effectsActive = false; // panel open state
+let stereoWidthNode = null;  // { splitter, gains, merger }
+let surroundNode = null;     // { splitter, delay, merger }
+let bassBoostFilter = null;  // BiquadFilterNode
+let effectsInjected = false; // whether effects are in the chain
 
 // Station Presets state
 const SP_KEY = 'radios_station_presets';
@@ -85,6 +100,10 @@ let plCurrentIndex = -1;
 let plShuffled = false;
 let plShuffleOrder = [];
 let plDragSrcIndex = -1;
+
+// Auto-skip state
+let autoSkipCount = 0;
+let autoSkipTimer = null;
 
 /* ── Init ── */
 async function init() {
@@ -253,6 +272,9 @@ async function init() {
     player.stop();
     const marquee = document.getElementById('radioDisplay');
     if (marquee) marquee.textContent = 'Parado';
+    if (nowPlayingInterval) { clearInterval(nowPlayingInterval); nowPlayingInterval = null; }
+    const trackEl = document.getElementById('nowPlayingTrack');
+    if (trackEl) trackEl.classList.add('hidden');
   });
   document.getElementById('btnPrev')?.addEventListener('click', playPrev);
   document.getElementById('btnNext')?.addEventListener('click', playNext);
@@ -294,6 +316,9 @@ async function init() {
 
   // Init EQ Panel UI
   initEqPanel();
+
+  // Init Effects Panel UI
+  initEffectsPanel();
 
   // Init Station Presets
   initStationPresets();
@@ -479,7 +504,7 @@ function initEqualizer() {
     return filter;
   });
 
-  // Chain: source → filter[0] → filter[1] → ... → analyser → destination
+  // Chain: source → filter[0] → filter[1] → ... → effects → analyser → destination
   try {
     const source = audioCtx.createMediaElementSource(audio);
     let node = source;
@@ -487,11 +512,14 @@ function initEqualizer() {
       node.connect(filter);
       node = filter;
     }
+    // Inject effects nodes between EQ and analyser
+    node = createEffectsChain(node);
     node.connect(analyser);
     analyser.connect(audioCtx.destination);
   } catch (e) {
     audioCtx = null;
     eqFilters = [];
+    effectsInjected = false;
     return;
   }
   analyser.fftSize = 64;
@@ -590,6 +618,172 @@ function initEqPanel() {
   });
 }
 
+/* ── Audio Effects Chain ── */
+function createEffectsChain(inputNode) {
+  if (!audioCtx) return inputNode;
+
+  // Stereo Width: Mid/Side processing
+  const swSplitter = audioCtx.createChannelSplitter(2);
+  const swGainL = audioCtx.createGain();
+  const swGainR = audioCtx.createGain();
+  const swGainCrossL = audioCtx.createGain();
+  const swGainCrossR = audioCtx.createGain();
+  const swMerger = audioCtx.createChannelMerger(2);
+
+  const savedWidth = parseFloat(localStorage.getItem('fx_stereo_width') || '100');
+  const widthNorm = savedWidth / 100;
+  const alpha = (1 + widthNorm) / 2;
+  const beta  = (1 - widthNorm) / 2;
+  swGainL.gain.value = alpha;
+  swGainR.gain.value = alpha;
+  swGainCrossL.gain.value = beta;
+  swGainCrossR.gain.value = beta;
+
+  // L' = L*alpha + R*beta
+  swSplitter.connect(swGainL, 0, 0);
+  swSplitter.connect(swGainCrossR, 1, 0);
+  swGainL.connect(swMerger, 0, 0);
+  swGainCrossR.connect(swMerger, 0, 0);
+  // R' = L*beta + R*alpha
+  swSplitter.connect(swGainCrossL, 0, 0);
+  swSplitter.connect(swGainR, 1, 0);
+  swGainCrossL.connect(swMerger, 0, 1);
+  swGainR.connect(swMerger, 0, 1);
+
+  stereoWidthNode = { splitter: swSplitter, gains: [swGainL, swGainR, swGainCrossL, swGainCrossR], merger: swMerger };
+
+  // Surround: Haas effect (delay on left channel)
+  const surrSplitter = audioCtx.createChannelSplitter(2);
+  const surrDelay = audioCtx.createDelay(0.1);
+  surrDelay.delayTime.value = 0.001; // min delay when off
+  const surrMerger = audioCtx.createChannelMerger(2);
+
+  surrSplitter.connect(surrDelay, 0, 0);
+  surrDelay.connect(surrMerger, 0, 0);
+  surrSplitter.connect(surrMerger, 1, 1);
+
+  surroundNode = { splitter: surrSplitter, delay: surrDelay, merger: surrMerger };
+
+  // Bass Boost
+  bassBoostFilter = audioCtx.createBiquadFilter();
+  bassBoostFilter.type = 'lowshelf';
+  bassBoostFilter.frequency.value = 80;
+  bassBoostFilter.Q.value = 0.8;
+  const savedBass = localStorage.getItem('fx_bass_boost') === 'true';
+  bassBoostFilter.gain.value = savedBass ? 6 : 0;
+
+  // Connect chain: input → swSplitter → swMerger → surrSplitter → surrMerger → bassBoost → output
+  inputNode.connect(swSplitter);
+  swMerger.connect(surrSplitter);
+  surrMerger.connect(bassBoostFilter);
+
+  effectsInjected = true;
+
+  // Restore surround state
+  const savedSurround = localStorage.getItem('fx_surround') === 'true';
+  surrDelay.delayTime.value = savedSurround ? 0.025 : 0.001;
+
+  return bassBoostFilter;
+}
+
+function updateStereoWidth(percent) {
+  if (!stereoWidthNode) return;
+  const widthNorm = percent / 100;
+  const alpha = (1 + widthNorm) / 2;
+  const beta  = (1 - widthNorm) / 2;
+  stereoWidthNode.gains[0].gain.value = alpha; // L_self
+  stereoWidthNode.gains[1].gain.value = alpha; // R_self
+  stereoWidthNode.gains[2].gain.value = beta;  // L_cross
+  stereoWidthNode.gains[3].gain.value = beta;  // R_cross
+  localStorage.setItem('fx_stereo_width', percent);
+}
+
+function updateSurround(enabled) {
+  if (!surroundNode) return;
+  surroundNode.delay.delayTime.value = enabled ? 0.025 : 0.001;
+  localStorage.setItem('fx_surround', enabled);
+}
+
+function updateBassBoost(enabled) {
+  if (!bassBoostFilter) return;
+  bassBoostFilter.gain.value = enabled ? 6 : 0;
+  localStorage.setItem('fx_bass_boost', enabled);
+}
+
+/* ── Effects Panel UI ── */
+function initEffectsPanel() {
+  const btnToggle = document.getElementById('btnEffectsToggle');
+  const panel     = document.getElementById('effectsPanel');
+  if (!btnToggle || !panel) return;
+
+  btnToggle.addEventListener('click', () => {
+    effectsActive = !effectsActive;
+    panel.classList.toggle('hidden', !effectsActive);
+    btnToggle.classList.toggle('effects-active', effectsActive);
+    // Close EQ panel if open
+    if (effectsActive && eqActive) {
+      document.getElementById('btnEqToggle').click();
+    }
+  });
+
+  // Stereo Width slider
+  const swSlider = document.getElementById('stereoWidthSlider');
+  const swVal    = document.getElementById('stereoWidthVal');
+  if (swSlider) {
+    swSlider.addEventListener('input', () => {
+      const val = parseInt(swSlider.value);
+      swVal.textContent = val + '%';
+      updateStereoWidth(val);
+    });
+  }
+
+  // Surround toggle
+  const surrToggle = document.getElementById('surroundToggle');
+  const surrStatus = document.getElementById('surroundStatus');
+  if (surrToggle) {
+    surrToggle.addEventListener('change', () => {
+      const on = surrToggle.checked;
+      surrStatus.textContent = on ? 'ON' : 'OFF';
+      updateSurround(on);
+    });
+  }
+
+  // Bass Boost toggle
+  const bassToggle = document.getElementById('bassBoostToggle');
+  const bassStatus = document.getElementById('bassBoostStatus');
+  if (bassToggle) {
+    bassToggle.addEventListener('change', () => {
+      const on = bassToggle.checked;
+      bassStatus.textContent = on ? 'ON' : 'OFF';
+      updateBassBoost(on);
+    });
+  }
+
+  // Reset all effects to Normal
+  document.getElementById('btnEffectsReset')?.addEventListener('click', () => {
+    // Reset Stereo Width to 100%
+    const swSlider = document.getElementById('stereoWidthSlider');
+    const swVal = document.getElementById('stereoWidthVal');
+    if (swSlider) { swSlider.value = '100'; }
+    if (swVal) { swVal.textContent = '100%'; }
+    updateStereoWidth(100);
+
+    // Reset Surround to off
+    const surrToggle = document.getElementById('surroundToggle');
+    const surrStatus = document.getElementById('surroundStatus');
+    if (surrToggle) { surrToggle.checked = false; }
+    if (surrStatus) { surrStatus.textContent = 'OFF'; }
+    updateSurround(false);
+
+    // Reset Bass Boost to off
+    const bassToggle = document.getElementById('bassBoostToggle');
+    const bassStatus = document.getElementById('bassBoostStatus');
+    if (bassToggle) { bassToggle.checked = false; }
+    if (bassStatus) { bassStatus.textContent = 'OFF'; }
+    updateBassBoost(false);
+  });
+}
+
 function initCarousel() {
   const container = document.getElementById('resultsSection');
   const cards = document.querySelectorAll('.station-card');
@@ -624,19 +818,37 @@ async function pickServer() {
     cachedServer = null;
   }
 
-  const shuffled = [...API_SERVERS].sort(() => Math.random() - 0.5);
+  // Resolve active servers dynamically from all.api.radio-browser.info
+  let activeServers = ['de1.api.radio-browser.info', 'de2.api.radio-browser.info'];
+  try {
+    const res = await fetch('https://all.api.radio-browser.info/json/servers', {
+      headers: { 'User-Agent': UA }
+    });
+    if (res.ok) {
+      const list = await res.json();
+      if (Array.isArray(list) && list.length > 0) {
+        activeServers = [...new Set(list.map(s => s.name))];
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to fetch active servers list, using fallback:', e);
+  }
+
+  const shuffled = activeServers.sort(() => Math.random() - 0.5);
   for (const s of shuffled) {
+    const hostname = s.includes('.api.radio-browser.info') ? s : `${s}.api.radio-browser.info`;
     try {
-      const res = await fetch(`https://${s}.api.radio-browser.info/json/stations/search?name=test&limit=1&hidebroken=true`, {
+      const res = await fetch(`https://${hostname}/json/stations/search?name=test&limit=1&hidebroken=true`, {
         headers: { 'User-Agent': UA }
       });
       if (res.ok) {
-        cachedServer = s;
-        return s;
+        const prefix = hostname.split('.')[0];
+        cachedServer = prefix;
+        return prefix;
       }
     } catch {}
   }
-  return null;
+  return 'de1';
 }
 
 /* ── Search (multi-strategy) ── */
@@ -657,7 +869,18 @@ async function search(query) {
   try {
     const server = await pickServer();
     if (!server) {
-      container.innerHTML = '<div class="status-msg error">No hay conexión con los servidores de radios. Verifica tu internet o abre con un servidor local (http://).</div>';
+      // Fallback: use only local database if API is unavailable
+      const qLow = query.toLowerCase();
+      const fallbackResults = deepDb.filter(s => {
+        return (s.name || '').toLowerCase().includes(qLow) || (s.tags || '').toLowerCase().includes(qLow);
+      });
+      if (fallbackResults.length) {
+        renderResults(fallbackResults);
+        setTimeout(initCarousel, 50);
+        container.innerHTML += '<div class="status-msg hint">Solo resultados locales (sin conexión a API)</div>';
+      } else {
+        container.innerHTML = '<div class="status-msg error">No hay conexión con los servidores de radios y no hay resultados locales.</div>';
+      }
       return;
     }
     const base = `https://${server}.api.radio-browser.info/json/stations/search`;
@@ -718,6 +941,15 @@ async function search(query) {
     // 1. Core query
     searches.push({ tag: query });
     searches.push({ name: query });
+    // Also search each word separately in tags for partial matches
+    const words = query.split(/\s+/);
+    if (words.length > 1) {
+      words.forEach(word => {
+        if (word.length >= 3) {
+          searches.push({ tag: word });
+        }
+      });
+    }
 
     // 2. Country detection
     let detectedCountry = false;
@@ -778,7 +1010,7 @@ async function search(query) {
     );
 
     const seen = new Set();
-    const merged = [];
+    let merged = [];
     const groups = [];
     
     // Mix local results in randomly
@@ -808,9 +1040,20 @@ async function search(query) {
       }
     }
 
-    // RELEVANCE LOGIC: Prioritize stations that actually have the query in their name
-    const exactMatches = merged.filter(s => (s.name || '').toLowerCase().includes(q.toLowerCase()));
-    const relatedMatches = merged.filter(s => !(s.name || '').toLowerCase().includes(q.toLowerCase()));
+    // Additional filter: include stations where tags contain query (even if not exact tag match)
+    // This captures partial matches like "smooth jazz" when searching just "jazz"
+    const qLow = q.toLowerCase();
+    merged = merged.filter(s => {
+      const tags = (s.tags || '').toLowerCase();
+      const name = (s.name || '').toLowerCase();
+      // Include if name matches, or tags match exactly, or tags contain the query as partial match
+      return name.includes(qLow) || tags.includes(qLow) || tags.split(',').map(t => t.trim()).some(t => t === qLow);
+    });
+
+    // RELEVANCE LOGIC: Prioritize by tags first, then name, then others
+    const tagMatches = merged.filter(s => (s.tags || '').toLowerCase().includes(qLow));
+    const nameMatches = merged.filter(s => (s.name || '').toLowerCase().includes(qLow) && !tagMatches.some(t => t.stationuuid === s.stationuuid));
+    const otherMatches = merged.filter(s => !(s.tags || '').toLowerCase().includes(qLow) && !(s.name || '').toLowerCase().includes(qLow));
 
     // Prioritize HTTPS over HTTP to avoid proxy (better performance, less load)
     const sortByHttps = (a, b) => {
@@ -819,7 +1062,7 @@ async function search(query) {
       return aHttps - bHttps;
     };
 
-    const finalMerged = [...exactMatches.sort(sortByHttps), ...relatedMatches.sort(sortByHttps)];
+    const finalMerged = [...tagMatches.sort(sortByHttps), ...nameMatches.sort(sortByHttps), ...otherMatches.sort(sortByHttps)];
 
     // DISCOVERY LOGIC: Move items already in playlist to the bottom
     const inPlaylistUuids = new Set(playlist.map(p => p.uuid));
@@ -855,7 +1098,7 @@ async function deepSearch() {
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
   try {
-    const res = await fetch(`api/websearch?q=${encodeURIComponent(query)}`);
+    const res = await fetch(getApiUrl(`api/websearch?q=${encodeURIComponent(query)}`));
     if (!res.ok) throw new Error();
     const data = await res.json();
 
@@ -947,6 +1190,10 @@ function play(url, name, uuid) {
   const audio = document.getElementById('audioPlayer');
   console.log('[PLAY] name=%s uuid=%s url=%s', name, uuid, url);
 
+  // Reset auto-skip on manual play
+  autoSkipCount = 0;
+  if (autoSkipTimer) { clearTimeout(autoSkipTimer); autoSkipTimer = null; }
+
   // Track currently playing station for preset assignment
   currentPlayingStation = { url, name, uuid };
   // Sync preset active state
@@ -983,6 +1230,7 @@ function play(url, name, uuid) {
   audio.addEventListener('error', function onPlayError() {
     console.error('[PLAY] audio error code=%d message=%s', this.error ? this.error.code : '?', this.error ? this.error.message : 'unknown');
     audio.removeEventListener('error', onPlayError);
+    handlePlaybackError();
   }, { once: true });
 
   audio.addEventListener('canplay', () => {
@@ -1002,17 +1250,20 @@ function play(url, name, uuid) {
   }).catch((err) => {
     console.error('[PLAY] playback error:', err);
     display.textContent = '⚠️ Error de conexión';
+    handlePlaybackError();
   });
 
   // Start metadata tracking if we have a valid UUID
   if (uuid && uuid !== 'undefined' && !uuid.startsWith('deep-')) {
-    startMetadataTracker(uuid);
+    startMetadataTracker(uuid, url);
   }
 }
 
-async function startMetadataTracker(uuid) {
+async function startMetadataTracker(uuid, stationUrl) {
   const display = document.getElementById('radioDisplay');
   const kbpsDisplay = document.getElementById('plCount');
+  const trackEl = document.getElementById('nowPlayingTrack');
+  const trackText = document.getElementById('nowPlayingTrackText');
   const server = await pickServer();
   if (!server) return;
 
@@ -1026,12 +1277,10 @@ async function startMetadataTracker(uuid) {
         const data = await res.json();
         if (data && data[0]) {
           const s = data[0];
-          // Update Winamp KBPS info
           if (kbpsDisplay && s.bitrate) {
             kbpsDisplay.textContent = `${s.bitrate} kbps`;
           }
           
-          // Cycle info in marquee
           const infoParts = [
             `*** REPRODUCIENDO: ${s.name} ***`,
             `GÉNERO: ${s.tags || 'Varios'}`,
@@ -1047,13 +1296,35 @@ async function startMetadataTracker(uuid) {
               display.textContent = infoParts[partIdx];
               partIdx = (partIdx + 1) % infoParts.length;
             }
-          }, 8000); // Change info every 8 seconds
+          }, 8000);
+        }
+      }
+    } catch {}
+  };
+
+  // Fetch now-playing track info from our server endpoint
+  const fetchNowPlaying = async () => {
+    if (!stationUrl) return;
+    try {
+      const res = await fetch(getApiUrl(`/api/nowplaying?url=${encodeURIComponent(stationUrl)}`));
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.title && trackEl && trackText) {
+          trackText.textContent = data.title;
+          trackEl.classList.remove('hidden');
+        } else if (trackEl) {
+          trackEl.classList.add('hidden');
         }
       }
     } catch {}
   };
 
   fetchMeta();
+  fetchNowPlaying();
+
+  // Poll now-playing (clear previous first)
+  if (nowPlayingInterval) clearInterval(nowPlayingInterval);
+  nowPlayingInterval = setInterval(fetchNowPlaying, 15000);
 }
 
 /* ── Click on Results ── */
@@ -1142,7 +1413,7 @@ function removeFromPlaylist(uuid) {
 /* ── SQLite Curated Radios Sync ── */
 async function syncCuratedFromServer() {
   try {
-    const res = await fetch('/api/curated');
+    const res = await fetch(getApiUrl('/api/curated'));
     if (res.ok) {
       const serverList = await res.json();
       if (Array.isArray(serverList) && serverList.length > 0) {
@@ -1168,7 +1439,7 @@ async function syncCuratedFromServer() {
 
 async function syncCuratedToServer(station) {
   try {
-    await fetch('/api/curated', {
+    await fetch(getApiUrl('/api/curated'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(station),
@@ -1180,7 +1451,7 @@ async function syncCuratedToServer(station) {
 
 async function removeCuratedFromServer(uuid) {
   try {
-    await fetch(`/api/curated?uuid=${encodeURIComponent(uuid)}`, { method: 'DELETE' });
+    await fetch(getApiUrl(`/api/curated?uuid=${encodeURIComponent(uuid)}`), { method: 'DELETE' });
   } catch (e) {
     console.warn('SQLite remove from server failed:', e);
   }
@@ -1359,6 +1630,26 @@ function playPrev() {
   if (plCurrentIndex < 0) plCurrentIndex = filtered.length - 1;
   const idx = plShuffled ? plShuffleOrder[plCurrentIndex] : plCurrentIndex;
   playPlItem(idx);
+}
+
+function handlePlaybackError() {
+  if (autoSkipTimer) return;
+  const filtered = getFilteredPlaylist();
+  if (plCurrentIndex >= 0 && filtered.length > 0) {
+    if (autoSkipCount >= filtered.length) {
+      console.warn('[AUTO-SKIP] All stations in playlist failed, stopping.');
+      const display = document.getElementById('radioDisplay');
+      if (display) display.textContent = '❌ Todas las radios fallaron';
+      return;
+    }
+    autoSkipCount++;
+    const display = document.getElementById('radioDisplay');
+    if (display) display.textContent = `⚠️ Error - Saltando a la siguiente... (${autoSkipCount}/${filtered.length})`;
+    autoSkipTimer = setTimeout(() => {
+      autoSkipTimer = null;
+      playNext();
+    }, 1500);
+  }
 }
 
 /* ── Drag & Drop ── */
