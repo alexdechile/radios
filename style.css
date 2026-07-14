@@ -1275,6 +1275,35 @@ html, body {
   animation: pulse-timer 2.5s infinite;
 }
 
+.btn-fav-player {
+  background: var(--bg-soft);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  outline: none;
+  font-size: 0.9rem;
+}
+
+.btn-fav-player:hover {
+  background: var(--pink-light);
+  color: #e53935;
+  border-color: var(--pink);
+}
+
+.btn-fav-player.is-fav {
+  color: #e53935;
+  background: var(--pink-light);
+  border-color: var(--pink);
+}
+
 @keyframes pulse-timer {
   0% { transform: scale(1); }
   50% { transform: scale(1.05); }

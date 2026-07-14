@@ -21,8 +21,9 @@
         <span>Radios</span>
       </div>
       <div class="header-actions">
-        <button class="btn-header-mini" id="btnMiniExportJSON"><i class="fas fa-download"></i></button>
-        <button class="btn-header-mini" id="btnMiniImportJSON"><i class="fas fa-upload"></i></button>
+        <button class="btn-header-mini" id="btnMiniExportJSON" title="Exportar Favoritos"><i class="fas fa-download"></i></button>
+        <button class="btn-header-mini" id="btnMiniImportJSON" title="Importar Favoritos"><i class="fas fa-upload"></i></button>
+        <button class="btn-header-mini" id="btnMiniTimerToggle" title="Temporizador / Despertador"><i class="far fa-clock"></i></button>
         <button class="btn-header-mini" id="btnMiniEffectsToggle" title="Efectos de Audio"><i class="fas fa-wand-magic-sparkles"></i></button>
         <button class="btn-classic-mode" id="btnClassicMode" title="Versión Clásica">
           <i class="fas fa-desktop"></i>
@@ -84,6 +85,45 @@
           </label>
           <span class="mini-effect-toggle-label" id="miniBassBoostStatus">OFF</span>
         </div>
+        <hr class="mini-effects-divider">
+        <div class="mini-eq-section">
+          <div class="mini-eq-header">
+            <span class="mini-eq-title"><i class="fas fa-wave-square"></i> Ecualizador</span>
+            <div class="mini-eq-presets">
+              <button class="btn-mini-eq-preset" data-preset="flat">FLAT</button>
+              <button class="btn-mini-eq-preset" data-preset="bass">BASS</button>
+              <button class="btn-mini-eq-preset" data-preset="vocal">VOZ</button>
+              <button class="btn-mini-eq-preset" data-preset="treble">AGUDOS</button>
+            </div>
+          </div>
+          <div class="mini-eq-bands">
+            <div class="mini-eq-band">
+              <span class="mini-eq-band-label">60Hz</span>
+              <input type="range" id="miniEqBand0" class="mini-eq-slider" min="-12" max="12" value="0" step="0.5">
+              <span class="mini-eq-band-value" id="miniEqVal0">0dB</span>
+            </div>
+            <div class="mini-eq-band">
+              <span class="mini-eq-band-label">250Hz</span>
+              <input type="range" id="miniEqBand1" class="mini-eq-slider" min="-12" max="12" value="0" step="0.5">
+              <span class="mini-eq-band-value" id="miniEqVal1">0dB</span>
+            </div>
+            <div class="mini-eq-band">
+              <span class="mini-eq-band-label">1kHz</span>
+              <input type="range" id="miniEqBand2" class="mini-eq-slider" min="-12" max="12" value="0" step="0.5">
+              <span class="mini-eq-band-value" id="miniEqVal2">0dB</span>
+            </div>
+            <div class="mini-eq-band">
+              <span class="mini-eq-band-label">4kHz</span>
+              <input type="range" id="miniEqBand3" class="mini-eq-slider" min="-12" max="12" value="0" step="0.5">
+              <span class="mini-eq-band-value" id="miniEqVal3">0dB</span>
+            </div>
+            <div class="mini-eq-band">
+              <span class="mini-eq-band-label">16kHz</span>
+              <input type="range" id="miniEqBand4" class="mini-eq-slider" min="-12" max="12" value="0" step="0.5">
+              <span class="mini-eq-band-value" id="miniEqVal4">0dB</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -133,13 +173,18 @@
             <span id="miniNowPlayingText"></span>
           </div>
         </div>
-        <div class="player-status-badge" id="playerStatusText">DETENIDO</div>
+        <div class="player-status-wrap">
+          <span id="miniAlarmIndicator" class="mini-timer-indicator-badge alarm-active hidden"></span>
+          <span id="miniTimerIndicator" class="mini-timer-indicator-badge hidden"></span>
+          <div class="player-status-badge" id="playerStatusText">DETENIDO</div>
+        </div>
       </div>
       
       <div class="player-controls">
         <button class="player-btn btn-nav" id="btnMiniPrev" title="Anterior"><i class="fas fa-backward-step"></i></button>
         <button class="player-btn btn-play-pause" id="btnMiniPlay" title="Reproducir"><i class="fas fa-play"></i></button>
         <button class="player-btn btn-nav" id="btnMiniNext" title="Siguiente"><i class="fas fa-forward-step"></i></button>
+        <button class="player-btn btn-fav" id="btnMiniFav" title="Favoritos"><i class="far fa-heart"></i></button>
         <button class="player-btn btn-mute" id="btnMiniMute" title="Silenciar"><i class="fas fa-volume-high"></i></button>
       </div>
 
@@ -147,6 +192,59 @@
         <div class="player-progress-fill" id="playerProgressFill"></div>
       </div>
     </footer>
+
+    <!-- Modal de Temporizador / Despertador (Mini) -->
+    <div id="miniTimerModal" class="mini-timer-modal">
+      <div class="mini-timer-modal-content">
+        <div class="mini-timer-modal-header">
+          <h3><i class="fas fa-clock"></i> Temporizador y Alarma</h3>
+          <button class="btn-close-modal" id="btnCloseMiniTimerModal">&times;</button>
+        </div>
+        
+        <div class="mini-timer-modal-body">
+          <!-- Sección Temporizador de Apagado -->
+          <div class="mini-timer-section-group">
+            <h4><i class="fas fa-moon"></i> Temporizador (Sleep)</h4>
+            <p class="section-desc">Detiene la reproducción automáticamente al expirar.</p>
+            <div class="mini-sleep-presets">
+              <button class="btn-mini-preset" data-minutes="15">15m</button>
+              <button class="btn-mini-preset" data-minutes="30">30m</button>
+              <button class="btn-mini-preset" data-minutes="45">45m</button>
+              <button class="btn-mini-preset" data-minutes="60">60m</button>
+              <button class="btn-mini-preset" id="btnMiniCustomSleep">Otro</button>
+            </div>
+            <div class="mini-custom-sleep-input-wrap hidden" id="miniCustomSleepInputWrap">
+              <input type="number" id="inputMiniCustomSleep" placeholder="Minutos" min="1" max="1440">
+              <button class="btn-mini-apply-custom" id="btnMiniApplyCustomSleep">OK</button>
+            </div>
+            <div class="mini-timer-status" id="miniSleepTimerStatus">
+              <span>Apagado automático desactivado.</span>
+            </div>
+          </div>
+          
+          <hr class="mini-modal-divider">
+          
+          <!-- Sección Despertador -->
+          <div class="mini-timer-section-group">
+            <h4><i class="fas fa-bell"></i> Despertador (Alarma)</h4>
+            <p class="section-desc">Sintoniza la radio elegida a la hora programada.</p>
+            <div class="mini-alarm-controls">
+              <input type="time" id="inputMiniAlarmTime" class="mini-alarm-time-input">
+              <button class="btn-mini-alarm-toggle" id="btnMiniToggleAlarm">Activar</button>
+            </div>
+            <div class="mini-alarm-station-select">
+              <label for="selectMiniAlarmStation">Emisora a sintonizar:</label>
+              <select id="selectMiniAlarmStation" class="mini-alarm-select">
+                <option value="current">Radio sintonizada</option>
+              </select>
+            </div>
+            <div class="mini-timer-status" id="miniAlarmStatus">
+              <span>Alarma desactivada.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Audio Element -->
     <audio id="audioElement" playsinline></audio>

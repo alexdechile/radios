@@ -68,6 +68,14 @@ let miniStereoWidthNode = null;
 let miniSurroundNode = null;
 let miniBassBoostFilter = null;
 
+// Timer & Alarm state
+let miniSleepTimeTarget = null;
+let miniAlarmTime = localStorage.getItem('mini_alarm_time') || '';
+let miniAlarmEnabled = localStorage.getItem('mini_alarm_enabled') === 'true';
+let miniAlarmStation = localStorage.getItem('mini_alarm_station') || 'current';
+let miniLastAlarmTriggeredDate = '';
+let miniAlarmCheckerInterval = null;
+
 // Initializer
 document.addEventListener('DOMContentLoaded', async () => {
   audio = document.getElementById('audioElement');
@@ -111,6 +119,25 @@ document.addEventListener('DOMContentLoaded', async () => {
       currentStation = JSON.parse(lastSaved);
       updatePlayerInfo(currentStation);
     } catch(e) {}
+  }
+
+  // Initialize Timer, Alarm and Equalizer Panel
+  initMiniTimerAndAlarm();
+  initMiniEqPanel();
+
+  // Deep Linking (Play from URL)
+  const params = new URLSearchParams(window.location.search);
+  const playUrl = params.get('play');
+  const playName = params.get('name');
+  if (playUrl && playName) {
+    setTimeout(() => {
+      const station = {
+        uuid: params.get('uuid') || Math.random().toString(36).substring(2, 11),
+        name: playName,
+        url: playUrl
+      };
+      playStation(station);
+    }, 1000);
   }
 });
 
@@ -177,6 +204,22 @@ function setupEventListeners() {
     if (bassToggle) bassToggle.checked = false;
     if (bassStatus) bassStatus.textContent = 'OFF';
     updateMiniBassBoost(false);
+
+    // Reset EQ to FLAT
+    document.querySelectorAll('.btn-mini-eq-preset').forEach(b => b.classList.remove('active'));
+    document.querySelector('.btn-mini-eq-preset[data-preset="flat"]')?.classList.add('active');
+    for (let i = 0; i < 5; i++) {
+      const slider = document.getElementById(`miniEqBand${i}`);
+      const valEl = document.getElementById(`miniEqVal${i}`);
+      if (slider) {
+        slider.value = '0';
+        if (valEl) valEl.textContent = '0dB';
+      }
+      if (miniEqFilters[i]) {
+        miniEqFilters[i].gain.value = 0;
+      }
+      localStorage.setItem(`mini_eq_band_${i}`, '0');
+    }
   });
 
   // Tab switching
@@ -266,6 +309,12 @@ function setupEventListeners() {
     miniAutoSkipCount = 0;
     if (miniAutoSkipTimer) { clearTimeout(miniAutoSkipTimer); miniAutoSkipTimer = null; }
     playNeighbor(1);
+  });
+
+  document.getElementById('btnMiniFav').addEventListener('click', () => {
+    if (!currentStation) return;
+    toggleFavorite(currentStation);
+    updateMiniFavButton();
   });
 
   const btnMute = document.getElementById('btnMiniMute');
@@ -728,6 +777,7 @@ function toggleFavorite(station) {
 
   savePlaylist();
   updateFavBadge();
+  updateMiniFavButton();
 
   // Redraw lists
   if (activeTab === 'playlist') {
@@ -743,6 +793,28 @@ function toggleFavorite(station) {
 // Update Favorite Badge Count
 function updateFavBadge() {
   document.getElementById('favCount').textContent = playlist.length;
+}
+
+// Update Player Heart Button State
+function updateMiniFavButton() {
+  const btn = document.getElementById('btnMiniFav');
+  if (!btn) return;
+  if (!currentStation) {
+    btn.classList.remove('is-fav');
+    btn.title = 'Favoritos';
+    btn.innerHTML = '<i class="far fa-heart"></i>';
+    return;
+  }
+  const inPl = playlist.some(p => p.url === currentStation.url);
+  if (inPl) {
+    btn.classList.add('is-fav');
+    btn.title = 'Quitar de favoritos';
+    btn.innerHTML = '<i class="fas fa-heart"></i>';
+  } else {
+    btn.classList.remove('is-fav');
+    btn.title = 'Agregar a favoritos';
+    btn.innerHTML = '<i class="far fa-heart"></i>';
+  }
 }
 
 /* ── Health Check ── */
@@ -862,6 +934,7 @@ function playStation(station) {
   localStorage.setItem('mini_last_station', JSON.stringify(station));
   
   updatePlayerInfo(station);
+  updateMiniFavButton();
 
   // Set visual active element in lists
   updateRadioCardsActiveState();
@@ -997,6 +1070,15 @@ function handleMiniPlaybackError() {
 }
 
 /* ── Mini Audio Effects ── */
+const MINI_EQ_BANDS = [
+  { freq: 60,    type: 'lowshelf'  },
+  { freq: 250,   type: 'peaking'   },
+  { freq: 1000,  type: 'peaking'   },
+  { freq: 4000,  type: 'peaking'   },
+  { freq: 16000, type: 'highshelf' },
+];
+let miniEqFilters = []; // 5 BiquadFilter nodes
+
 function initMiniEffectsChain() {
   if (miniAudioCtx && miniEffectsInjected) return;
   if (!audio) return;
@@ -1004,6 +1086,17 @@ function initMiniEffectsChain() {
   try {
     miniAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const source = miniAudioCtx.createMediaElementSource(audio);
+
+    // Build EQ filter chain
+    miniEqFilters = MINI_EQ_BANDS.map((band, i) => {
+      const filter = miniAudioCtx.createBiquadFilter();
+      filter.type = band.type;
+      filter.frequency.value = band.freq;
+      filter.Q.value = 1.4;
+      const saved = parseFloat(localStorage.getItem(`mini_eq_band_${i}`) || '0');
+      filter.gain.value = saved;
+      return filter;
+    });
 
     // Stereo Width
     const swSplitter = miniAudioCtx.createChannelSplitter(2);
@@ -1046,7 +1139,12 @@ function initMiniEffectsChain() {
     miniBassBoostFilter.gain.value = localStorage.getItem('mini_fx_bass_boost') === 'true' ? 6 : 0;
 
     // Connect chain
-    source.connect(swSplitter);
+    let node = source;
+    for (const filter of miniEqFilters) {
+      node.connect(filter);
+      node = filter;
+    }
+    node.connect(swSplitter);
     swMerger.connect(srSplitter);
     srMerger.connect(miniBassBoostFilter);
     miniBassBoostFilter.connect(miniAudioCtx.destination);
@@ -1198,3 +1296,403 @@ function importMiniPlaylist() {
   };
   input.click();
 }
+
+/* ── Sleep Timer & Alarm Clock Logic (Mini) ── */
+function initMiniTimerAndAlarm() {
+  const btnToggle = document.getElementById('btnMiniTimerToggle');
+  const modal = document.getElementById('miniTimerModal');
+  const btnClose = document.getElementById('btnCloseMiniTimerModal');
+  
+  if (!btnToggle || !modal || !btnClose) return;
+
+  btnToggle.addEventListener('click', () => {
+    modal.classList.add('show');
+    populateMiniAlarmStations();
+    updateMiniTimerModalUI();
+  });
+
+  btnClose.addEventListener('click', () => {
+    modal.classList.remove('show');
+  });
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.classList.remove('show');
+    }
+  });
+
+  document.getElementById('miniTimerIndicator')?.addEventListener('click', () => btnToggle.click());
+  document.getElementById('miniAlarmIndicator')?.addEventListener('click', () => btnToggle.click());
+
+  // Sleep Presets
+  const presets = document.querySelectorAll('.mini-sleep-presets .btn-mini-preset[data-minutes]');
+  presets.forEach(btn => {
+    btn.addEventListener('click', () => {
+      presets.forEach(p => p.classList.remove('active'));
+      document.getElementById('miniCustomSleepInputWrap').classList.add('hidden');
+      
+      const mins = parseInt(btn.dataset.minutes);
+      miniSleepTimeTarget = Date.now() + mins * 60 * 1000;
+      updateMiniTimerModalUI();
+      updateMiniBadges();
+      btn.classList.add('active');
+    });
+  });
+
+  const btnCustom = document.getElementById('btnMiniCustomSleep');
+  const customWrap = document.getElementById('miniCustomSleepInputWrap');
+  if (btnCustom && customWrap) {
+    btnCustom.addEventListener('click', () => {
+      presets.forEach(p => p.classList.remove('active'));
+      btnCustom.classList.add('active');
+      customWrap.classList.remove('hidden');
+      document.getElementById('inputMiniCustomSleep').focus();
+    });
+  }
+
+  document.getElementById('btnMiniApplyCustomSleep')?.addEventListener('click', () => {
+    const input = document.getElementById('inputMiniCustomSleep');
+    const mins = parseInt(input.value);
+    if (isNaN(mins) || mins <= 0) {
+      alert('Ingresa un número válido de minutos');
+      return;
+    }
+    miniSleepTimeTarget = Date.now() + mins * 60 * 1000;
+    updateMiniTimerModalUI();
+    updateMiniBadges();
+  });
+
+  // Alarm Clock Setup
+  const inputAlarmTime = document.getElementById('inputMiniAlarmTime');
+  const btnToggleAlarm = document.getElementById('btnMiniToggleAlarm');
+  const selectAlarmStation = document.getElementById('selectMiniAlarmStation');
+
+  if (inputAlarmTime) inputAlarmTime.value = miniAlarmTime;
+  if (selectAlarmStation) {
+    selectAlarmStation.value = miniAlarmStation;
+    selectAlarmStation.addEventListener('change', () => {
+      miniAlarmStation = selectAlarmStation.value;
+      localStorage.setItem('mini_alarm_station', miniAlarmStation);
+      updateMiniTimerModalUI();
+      updateMiniBadges();
+    });
+  }
+
+  if (btnToggleAlarm) {
+    btnToggleAlarm.addEventListener('click', () => {
+      if (miniAlarmEnabled) {
+        miniAlarmEnabled = false;
+        localStorage.setItem('mini_alarm_enabled', 'false');
+      } else {
+        const val = inputAlarmTime.value;
+        if (!val) {
+          alert('Por favor selecciona una hora para la alarma.');
+          return;
+        }
+        miniAlarmTime = val;
+        miniAlarmEnabled = true;
+        localStorage.setItem('mini_alarm_time', miniAlarmTime);
+        localStorage.setItem('mini_alarm_enabled', 'true');
+      }
+      updateMiniTimerModalUI();
+      updateMiniBadges();
+    });
+  }
+
+  if (inputAlarmTime) {
+    inputAlarmTime.addEventListener('change', () => {
+      miniAlarmTime = inputAlarmTime.value;
+      localStorage.setItem('mini_alarm_time', miniAlarmTime);
+      if (miniAlarmEnabled) {
+        updateMiniTimerModalUI();
+        updateMiniBadges();
+      }
+    });
+  }
+
+  if (miniAlarmCheckerInterval) clearInterval(miniAlarmCheckerInterval);
+  miniAlarmCheckerInterval = setInterval(() => {
+    checkMiniAlarm();
+    updateMiniSleepCountdown();
+  }, 1000);
+
+  updateMiniTimerModalUI();
+  updateMiniBadges();
+}
+
+function checkMiniAlarm() {
+  if (!miniAlarmEnabled || !miniAlarmTime) return;
+
+  const now = new Date();
+  const hrs = now.getHours().toString().padStart(2, '0');
+  const mins = now.getMinutes().toString().padStart(2, '0');
+  const currentTimeString = `${hrs}:${mins}`;
+
+  if (currentTimeString === miniAlarmTime) {
+    const todayStr = now.toDateString() + ' ' + currentTimeString;
+    if (miniLastAlarmTriggeredDate !== todayStr) {
+      miniLastAlarmTriggeredDate = todayStr;
+      triggerMiniAlarm();
+    }
+  }
+}
+
+function triggerMiniAlarm() {
+  console.log('[ALARM] Mini Alarm clock triggered at %s!', miniAlarmTime);
+  let targetStation = null;
+  if (miniAlarmStation !== 'current') {
+    targetStation = playlist.find(s => (s.uuid || s.stationuuid) === miniAlarmStation);
+  }
+  const marquee = document.getElementById('nowPlayingTitle');
+  if (targetStation) {
+    if (marquee) marquee.textContent = `⏰ ¡ALARMA! Sintonizando ${targetStation.name}...`;
+    playStation(targetStation);
+  } else {
+    if (currentStation) {
+      if (marquee) marquee.textContent = `⏰ ¡ALARMA! Sintonizando ${currentStation.name}...`;
+      playStation(currentStation);
+    } else if (playlist.length > 0) {
+      const first = playlist[0];
+      if (marquee) marquee.textContent = `⏰ ¡ALARMA! Sintonizando ${first.name}...`;
+      playStation(first);
+    } else {
+      if (marquee) marquee.textContent = '⏰ ¡ALARMA! (No hay favoritos)';
+      const fallback = SPONSORED_STATIONS[0];
+      playStation(fallback);
+    }
+  }
+}
+
+function updateMiniSleepCountdown() {
+  if (!miniSleepTimeTarget) return;
+  
+  const diff = miniSleepTimeTarget - Date.now();
+  if (diff <= 0) {
+    miniSleepTimeTarget = null;
+    triggerMiniSleepStop();
+  } else {
+    updateMiniBadges();
+    const statusDiv = document.getElementById('miniSleepTimerStatus');
+    if (statusDiv) {
+      const remainingSecs = Math.floor(diff / 1000);
+      const m = Math.floor(remainingSecs / 60).toString().padStart(2, '0');
+      const s = (remainingSecs % 60).toString().padStart(2, '0');
+      statusDiv.innerHTML = `
+        <span>⏳ Quedan <strong>${m}:${s}</strong> min para apagar.</span>
+        <button class="btn-cancel-timer" onclick="cancelMiniSleepTimer()">Cancelar</button>
+      `;
+      statusDiv.classList.add('active');
+    }
+  }
+}
+
+function triggerMiniSleepStop() {
+  console.log('[TIMER] Mini Sleep timer triggered. Stopping playback.');
+  if (audio) {
+    audio.pause();
+  }
+  const marquee = document.getElementById('nowPlayingTitle');
+  if (marquee) marquee.textContent = 'Apagado automático por temporizador';
+  
+  updateMiniTimerModalUI();
+  updateMiniBadges();
+}
+
+function cancelMiniSleepTimer() {
+  miniSleepTimeTarget = null;
+  const presets = document.querySelectorAll('.mini-sleep-presets .btn-mini-preset');
+  presets.forEach(p => p.classList.remove('active'));
+  const customWrap = document.getElementById('miniCustomSleepInputWrap');
+  if (customWrap) customWrap.classList.add('hidden');
+  const customInput = document.getElementById('inputMiniCustomSleep');
+  if (customInput) customInput.value = '';
+  
+  updateMiniTimerModalUI();
+  updateMiniBadges();
+}
+window.cancelMiniSleepTimer = cancelMiniSleepTimer;
+
+function updateMiniBadges() {
+  const btnToggle = document.getElementById('btnMiniTimerToggle');
+  const alarmBadge = document.getElementById('miniAlarmIndicator');
+  const sleepBadge = document.getElementById('miniTimerIndicator');
+
+  let anyActive = false;
+
+  // Alarm Badge
+  if (alarmBadge) {
+    if (miniAlarmEnabled && miniAlarmTime) {
+      alarmBadge.textContent = `⏰ ${miniAlarmTime}`;
+      alarmBadge.classList.remove('hidden');
+      anyActive = true;
+    } else {
+      alarmBadge.classList.add('hidden');
+    }
+  }
+
+  // Sleep Badge
+  if (sleepBadge) {
+    if (miniSleepTimeTarget) {
+      const remaining = Math.max(0, Math.floor((miniSleepTimeTarget - Date.now()) / 1000));
+      const m = Math.floor(remaining / 60);
+      const s = remaining % 60;
+      sleepBadge.textContent = `⏳ ${m}:${s.toString().padStart(2, '0')}`;
+      sleepBadge.classList.remove('hidden');
+      anyActive = true;
+    } else {
+      sleepBadge.classList.add('hidden');
+    }
+  }
+
+  // Main Toggle Button in Header
+  if (btnToggle) {
+    if (anyActive) {
+      btnToggle.classList.add('active');
+    } else {
+      btnToggle.classList.remove('active');
+    }
+  }
+}
+
+function updateMiniTimerModalUI() {
+  const statusDiv = document.getElementById('miniSleepTimerStatus');
+  if (statusDiv) {
+    if (miniSleepTimeTarget) {
+      const remainingSecs = Math.max(0, Math.floor((miniSleepTimeTarget - Date.now()) / 1000));
+      const m = Math.floor(remainingSecs / 60).toString().padStart(2, '0');
+      const s = (remainingSecs % 60).toString().padStart(2, '0');
+      statusDiv.innerHTML = `
+        <span>⏳ Quedan <strong>${m}:${s}</strong> min para apagar.</span>
+        <button class="btn-cancel-timer" onclick="cancelMiniSleepTimer()">Cancelar</button>
+      `;
+      statusDiv.classList.add('active');
+    } else {
+      statusDiv.innerHTML = '<span>Apagado automático desactivado.</span>';
+      statusDiv.classList.remove('active');
+    }
+  }
+
+  const btnToggleAlarm = document.getElementById('btnMiniToggleAlarm');
+  const alarmStatusDiv = document.getElementById('miniAlarmStatus');
+  const inputAlarmTime = document.getElementById('inputMiniAlarmTime');
+
+  if (btnToggleAlarm) {
+    if (miniAlarmEnabled) {
+      btnToggleAlarm.textContent = 'Desactivar';
+      btnToggleAlarm.classList.add('active');
+    } else {
+      btnToggleAlarm.textContent = 'Activar';
+      btnToggleAlarm.classList.remove('active');
+    }
+  }
+
+  if (alarmStatusDiv) {
+    if (miniAlarmEnabled && miniAlarmTime) {
+      let stationName = 'Radio actual';
+      if (miniAlarmStation !== 'current') {
+        const station = playlist.find(s => (s.uuid || s.stationuuid) === miniAlarmStation);
+        if (station) stationName = station.name;
+      }
+      alarmStatusDiv.innerHTML = `
+        <span>🔔 Activa a las <strong>${miniAlarmTime}</strong> sintonizando <em>"${stationName}"</em>.</span>
+      `;
+      alarmStatusDiv.classList.add('active');
+    } else {
+      alarmStatusDiv.innerHTML = '<span>Alarma desactivada.</span>';
+      alarmStatusDiv.classList.remove('active');
+    }
+  }
+}
+
+function populateMiniAlarmStations() {
+  const select = document.getElementById('selectMiniAlarmStation');
+  if (!select) return;
+  
+  const currentVal = select.value || miniAlarmStation;
+  select.innerHTML = '<option value="current">Radio sintonizada</option>';
+  
+  playlist.forEach(s => {
+    const uuid = s.uuid || s.stationuuid || '';
+    if (!uuid) return;
+    const option = document.createElement('option');
+    option.value = uuid;
+    option.textContent = s.name;
+    select.appendChild(option);
+  });
+  
+  if (Array.from(select.options).some(opt => opt.value === currentVal)) {
+    select.value = currentVal;
+  } else {
+    select.value = 'current';
+  }
+}
+
+/* ── Equalizer Panel UI (Mini) ── */
+function initMiniEqPanel() {
+  // Restore sliders from localstorage
+  for (let i = 0; i < 5; i++) {
+    const slider = document.getElementById(`miniEqBand${i}`);
+    const valEl = document.getElementById(`miniEqVal${i}`);
+    if (slider) {
+      const saved = localStorage.getItem(`mini_eq_band_${i}`) || '0';
+      slider.value = saved;
+      if (valEl) valEl.textContent = `${saved}dB`;
+
+      slider.addEventListener('input', () => {
+        const val = parseFloat(slider.value);
+        if (valEl) valEl.textContent = `${val}dB`;
+        if (miniEqFilters[i]) {
+          miniEqFilters[i].gain.value = val;
+        }
+        localStorage.setItem(`mini_eq_band_${i}`, val);
+        
+        // Remove preset highlights
+        document.querySelectorAll('.btn-mini-eq-preset').forEach(b => b.classList.remove('active'));
+      });
+    }
+  }
+
+  // Presets
+  const EQ_PRESETS = {
+    flat:   [0,   0,   0,   0,   0 ],
+    bass:   [8,   4,   0,  -2,  -2 ],
+    vocal:  [-2,  0,   5,   4,   0 ],
+    treble: [-2, -2,   0,   4,   8 ],
+  };
+
+  document.querySelectorAll('.btn-mini-eq-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const presetName = btn.dataset.preset;
+      const gains = EQ_PRESETS[presetName];
+      if (!gains) return;
+
+      document.querySelectorAll('.btn-mini-eq-preset').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      gains.forEach((gain, i) => {
+        const slider = document.getElementById(`miniEqBand${i}`);
+        const valEl = document.getElementById(`miniEqVal${i}`);
+        if (slider) {
+          slider.value = gain;
+          if (valEl) valEl.textContent = `${gain}dB`;
+        }
+        if (miniEqFilters[i]) {
+          miniEqFilters[i].gain.value = gain;
+        }
+        localStorage.setItem(`mini_eq_band_${i}`, gain);
+      });
+    });
+  });
+
+  // Restore preset active highlight if it matches
+  const currentGains = [];
+  for (let i = 0; i < 5; i++) {
+    currentGains.push(parseFloat(localStorage.getItem(`mini_eq_band_${i}`) || '0'));
+  }
+  for (const [name, gains] of Object.entries(EQ_PRESETS)) {
+    if (gains.every((g, idx) => g === currentGains[idx])) {
+      document.querySelector(`.btn-mini-eq-preset[data-preset="${name}"]`)?.classList.add('active');
+    }
+  }
+}
+

@@ -43,6 +43,8 @@ let playlist = [];
 let searchHistory = [];
 let deepDb = [];
 let cachedServer = null;
+let searchResults = [];
+let activeQueue = 'playlist';
 let metadataInterval = null;
 let nowPlayingInterval = null;
 let audioCtx = null;
@@ -260,6 +262,7 @@ async function init() {
   const sectionPlaylist = document.getElementById('playlistSection');
 
   tabResults.addEventListener('click', () => {
+    activeQueue = 'results';
     tabResults.classList.add('active');
     tabPlaylist.classList.remove('active');
     sectionResults.classList.remove('hidden');
@@ -268,6 +271,7 @@ async function init() {
   });
 
   tabPlaylist.addEventListener('click', () => {
+    activeQueue = 'playlist';
     tabPlaylist.classList.add('active');
     tabResults.classList.remove('active');
     sectionPlaylist.classList.remove('hidden');
@@ -294,6 +298,19 @@ async function init() {
     autoSkipCount = 0;
     if (autoSkipTimer) { clearTimeout(autoSkipTimer); autoSkipTimer = null; }
     playNext();
+  });
+
+  // Favorite toggle from player
+  document.getElementById('btnFavPlayer')?.addEventListener('click', () => {
+    const cur = currentPlayingStation;
+    if (!cur || !cur.uuid) return;
+    const inPl = playlist.some(p => p.uuid === cur.uuid);
+    if (inPl) {
+      removeFromPlaylist(cur.uuid);
+    } else {
+      addToPlaylist({ uuid: cur.uuid, name: cur.name, url: cur.url });
+    }
+    updatePlayerFavButton();
   });
 
   // Auto-advance on stream end
@@ -907,6 +924,16 @@ async function search(query) {
         return (s.name || '').toLowerCase().includes(qLow) || (s.tags || '').toLowerCase().includes(qLow);
       });
       if (fallbackResults.length) {
+        searchResults = fallbackResults.map(s => ({
+          uuid: s.stationuuid || s.uuid || '',
+          name: s.name || 'Sin nombre',
+          url: s.url_resolved || s.url || '',
+          tags: s.tags || '',
+          favicon: s.favicon || '',
+          country: s.country || '',
+          bitrate: s.bitrate || '',
+          codec: s.codec || ''
+        }));
         renderResults(fallbackResults);
         setTimeout(initCarousel, 50);
         container.innerHTML += '<div class="status-msg hint">Solo resultados locales (sin conexión a API)</div>';
@@ -1107,7 +1134,18 @@ async function search(query) {
     const discoveryResults = finalMerged.filter(s => !inPlaylistUuids.has(s.stationuuid || s.uuid));
     const alreadyFavorited = finalMerged.filter(s => inPlaylistUuids.has(s.stationuuid || s.uuid));
 
-    renderResults([...discoveryResults, ...alreadyFavorited].slice(0, 150));
+    const finalResults = [...discoveryResults, ...alreadyFavorited].slice(0, 150);
+    searchResults = finalResults.map(s => ({
+      uuid: s.stationuuid || s.uuid || '',
+      name: s.name || 'Sin nombre',
+      url: s.url_resolved || s.url || '',
+      tags: s.tags || '',
+      favicon: s.favicon || '',
+      country: s.country || '',
+      bitrate: s.bitrate || '',
+      codec: s.codec || ''
+    }));
+    renderResults(finalResults);
     setTimeout(initCarousel, 50);
     // Start health check in background
     hasAutoPlayed = false;
@@ -1308,6 +1346,13 @@ function play(url, name, uuid) {
   const audio = document.getElementById('audioPlayer');
   console.log('[PLAY] name=%s uuid=%s url=%s', name, uuid, url);
 
+  // Set activeQueue automatically depending on where the station came from
+  if (playlist.some(p => p.url === url)) {
+    activeQueue = 'playlist';
+  } else if (searchResults.some(s => s.url === url)) {
+    activeQueue = 'results';
+  }
+
   // Stop auto-play scanning
   autoPlayScanning = false;
   hasAutoPlayed = true;
@@ -1317,6 +1362,8 @@ function play(url, name, uuid) {
   currentPlayingStation = { url, name, uuid };
   // Sync preset active state
   syncPresetActiveState(url);
+  // Update player fav button state
+  updatePlayerFavButton();
 
   // Clear previous metadata interval
   if (metadataInterval) clearInterval(metadataInterval);
@@ -1556,6 +1603,7 @@ function addToPlaylist(station) {
   persistPlaylist();
   renderPlaylist();
   updateResultAddButton(station.uuid, true);
+  updatePlayerFavButton();
   if (!station.is_sponsored) syncCuratedToServer(station);
 }
 
@@ -1565,6 +1613,7 @@ function removeFromPlaylist(uuid) {
   persistPlaylist();
   renderPlaylist();
   updateResultAddButton(uuid, false);
+  updatePlayerFavButton();
   if (removed && !removed.is_sponsored) removeCuratedFromServer(uuid);
 }
 
@@ -1619,6 +1668,28 @@ function persistPlaylist() {
   // Guardar solo las que no son patrocinadas para que el "patrocinio" sea fresco cada vez
   const toSave = playlist.filter(s => !s.is_sponsored);
   localStorage.setItem(STORE_KEY, JSON.stringify(toSave));
+}
+
+function updatePlayerFavButton() {
+  const btn = document.getElementById('btnFavPlayer');
+  if (!btn) return;
+  const cur = currentPlayingStation;
+  if (!cur || !cur.uuid) {
+    btn.classList.remove('is-fav');
+    btn.title = 'Agregar a favoritos';
+    btn.innerHTML = '<i class="far fa-heart"></i>';
+    return;
+  }
+  const inPl = playlist.some(p => p.uuid === cur.uuid);
+  if (inPl) {
+    btn.classList.add('is-fav');
+    btn.title = 'Quitar de favoritos';
+    btn.innerHTML = '<i class="fas fa-heart"></i>';
+  } else {
+    btn.classList.remove('is-fav');
+    btn.title = 'Agregar a favoritos';
+    btn.innerHTML = '<i class="far fa-heart"></i>';
+  }
 }
 
 function updateResultAddButton(uuid, added) {
@@ -1771,48 +1842,95 @@ function playPlItem(filteredIdx) {
 }
 
 function playNext() {
-  const filtered = getFilteredPlaylist();
-  if (!filtered.length) return;
-  if (plCurrentIndex < 0) { playlistPlayAll(); return; }
-  plCurrentIndex++;
-  if (plCurrentIndex >= filtered.length) plCurrentIndex = 0;
-  const idx = plShuffled ? plShuffleOrder[plCurrentIndex] : plCurrentIndex;
-  playPlItem(idx);
+  if (activeQueue === 'results' && searchResults.length > 0) {
+    let idx = searchResults.findIndex(s => s.url === currentPlayingStation?.url);
+    let nextIdx = idx + 1;
+    if (nextIdx >= searchResults.length) nextIdx = 0;
+    const nextStation = searchResults[nextIdx];
+    if (nextStation) {
+      play(nextStation.url, nextStation.name, nextStation.uuid);
+    }
+  } else {
+    const filtered = getFilteredPlaylist();
+    if (!filtered.length) return;
+    if (plCurrentIndex < 0) { playlistPlayAll(); return; }
+    plCurrentIndex++;
+    if (plCurrentIndex >= filtered.length) plCurrentIndex = 0;
+    const idx = plShuffled ? plShuffleOrder[plCurrentIndex] : plCurrentIndex;
+    playPlItem(idx);
+  }
 }
 
 function playPrev() {
-  const filtered = getFilteredPlaylist();
-  if (!filtered.length) return;
-  if (plCurrentIndex < 0) { playlistPlayAll(); return; }
-  plCurrentIndex--;
-  if (plCurrentIndex < 0) plCurrentIndex = filtered.length - 1;
-  const idx = plShuffled ? plShuffleOrder[plCurrentIndex] : plCurrentIndex;
-  playPlItem(idx);
+  if (activeQueue === 'results' && searchResults.length > 0) {
+    let idx = searchResults.findIndex(s => s.url === currentPlayingStation?.url);
+    let prevIdx = idx - 1;
+    if (prevIdx < 0) prevIdx = searchResults.length - 1;
+    const prevStation = searchResults[prevIdx];
+    if (prevStation) {
+      play(prevStation.url, prevStation.name, prevStation.uuid);
+    }
+  } else {
+    const filtered = getFilteredPlaylist();
+    if (!filtered.length) return;
+    if (plCurrentIndex < 0) { playlistPlayAll(); return; }
+    plCurrentIndex--;
+    if (plCurrentIndex < 0) plCurrentIndex = filtered.length - 1;
+    const idx = plShuffled ? plShuffleOrder[plCurrentIndex] : plCurrentIndex;
+    playPlItem(idx);
+  }
 }
 
 function handlePlaybackError() {
   if (autoSkipTimer) return;
-  const filtered = getFilteredPlaylist();
-  if (plCurrentIndex >= 0 && filtered.length > 0) {
-    if (autoSkipCount >= filtered.length) {
-      console.warn('[AUTO-SKIP] All stations in playlist failed, stopping.');
-      const display = document.getElementById('radioDisplay');
-      if (display) display.textContent = '❌ Todas las radios fallaron';
-      return;
+  
+  if (activeQueue === 'results' && searchResults.length > 0) {
+    let idx = searchResults.findIndex(s => s.url === currentPlayingStation?.url);
+    if (idx >= 0) {
+      if (autoSkipCount >= searchResults.length) {
+        console.warn('[AUTO-SKIP] All stations in search results failed, stopping.');
+        const display = document.getElementById('radioDisplay');
+        if (display) display.textContent = '❌ Todas las radios fallaron';
+        return;
+      }
+      autoSkipCount++;
+      if (autoPlayScanning) {
+        autoSkipTimer = setTimeout(() => {
+          autoSkipTimer = null;
+          playNext();
+        }, 800);
+      } else {
+        const display = document.getElementById('radioDisplay');
+        if (display) display.textContent = `⏩ Siguiente... (${autoSkipCount}/${searchResults.length})`;
+        autoSkipTimer = setTimeout(() => {
+          autoSkipTimer = null;
+          playNext();
+        }, 2000);
+      }
     }
-    autoSkipCount++;
-    if (autoPlayScanning) {
-      autoSkipTimer = setTimeout(() => {
-        autoSkipTimer = null;
-        playNext();
-      }, 800);
-    } else {
-      const display = document.getElementById('radioDisplay');
-      if (display) display.textContent = `⏩ Siguiente... (${autoSkipCount}/${filtered.length})`;
-      autoSkipTimer = setTimeout(() => {
-        autoSkipTimer = null;
-        playNext();
-      }, 2000);
+  } else {
+    const filtered = getFilteredPlaylist();
+    if (plCurrentIndex >= 0 && filtered.length > 0) {
+      if (autoSkipCount >= filtered.length) {
+        console.warn('[AUTO-SKIP] All stations in playlist failed, stopping.');
+        const display = document.getElementById('radioDisplay');
+        if (display) display.textContent = '❌ Todas las radios fallaron';
+        return;
+      }
+      autoSkipCount++;
+      if (autoPlayScanning) {
+        autoSkipTimer = setTimeout(() => {
+          autoSkipTimer = null;
+          playNext();
+        }, 800);
+      } else {
+        const display = document.getElementById('radioDisplay');
+        if (display) display.textContent = `⏩ Siguiente... (${autoSkipCount}/${filtered.length})`;
+        autoSkipTimer = setTimeout(() => {
+          autoSkipTimer = null;
+          playNext();
+        }, 2000);
+      }
     }
   }
 }

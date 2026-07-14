@@ -1,6 +1,12 @@
 # Radios App - DonAlex Homelab
 
 ## Último Realizado
+- [x] **Paridad de Funcionalidades entre Versión Clásica y Versión Mini**:
+  - **Temporizador de Apagado y Despertador (Mini)**: Implementado el panel modal y lógica de temporizador (Sleep Timer con presets/personalizado) y despertador (alarma programable) en la versión Mini (`mini.html`, `mini.js`, `mini.css`), con sincronización de la emisora elegida y visualización de badges de cuenta regresiva/reloj apilados verticalmente de forma compacta.
+  - **Ecualizador de 5 bandas (Mini)**: Añadido el panel de ecualización de 5 bandas (60Hz, 250Hz, 1kHz, 4kHz, 16kHz) con presets (FLAT/BASS/VOZ/AGUDOS) y conexión real al Web Audio API en la versión Mini, optimizando el control táctil con sliders horizontales compactos integrados en la pestaña de Efectos.
+  - **Autoplay y Navegación Coherentes (Clásica y Mini)**:
+    - Soportada la navegación (Prev/Next) y autoreproducción/salto automático por error en los resultados de búsqueda activos en la versión Clásica (alineada con la lógica de cola `activeQueue` de la versión Mini).
+    - Añadida autodetección y autoreproducción de streams mediante enlaces directos (Deep Linking con query params `?play=url&name=name`) en la versión Mini para emparejar la funcionalidad de compartición de la versión Clásica.
 - [x] **Descubrimiento Dinámico de Servidores de API**:
   - Implementado un mecanismo de resolución dinámica de servidores activos consultando `all.api.radio-browser.info/json/servers` en `pickServer()` para `app.js` y `mini.js`.
   - Esto previene errores de resolución DNS (`net::ERR_NAME_NOT_RESOLVED`) y limpia la consola del navegador al evitar peticiones de sondeo a servidores dados de baja o fuera de servicio temporalmente (como `at1`, `de2` o `nl1`).
