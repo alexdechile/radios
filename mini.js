@@ -48,6 +48,15 @@ let activeTab = 'results'; // 'results' or 'playlist'
 let miniAutoSkipCount = 0;
 let miniAutoSkipTimer = null;
 
+// Health check state
+const MINI_HEALTH_CHECK_TIMEOUT = 6000;
+const MINI_HEALTH_CONCURRENCY = 3;
+let miniStationHealth = new Map();
+let miniHasAutoPlayed = false;
+let miniAutoPlayScanning = false;
+let miniHideOffline = false;
+let miniHealthCheckAborted = false;
+
 // Now-playing poll interval
 let miniNowPlayingInterval = null;
 
@@ -248,10 +257,14 @@ function setupEventListeners() {
   });
 
   document.getElementById('btnMiniPrev').addEventListener('click', () => {
+    miniAutoSkipCount = 0;
+    if (miniAutoSkipTimer) { clearTimeout(miniAutoSkipTimer); miniAutoSkipTimer = null; }
     playNeighbor(-1);
   });
 
   document.getElementById('btnMiniNext').addEventListener('click', () => {
+    miniAutoSkipCount = 0;
+    if (miniAutoSkipTimer) { clearTimeout(miniAutoSkipTimer); miniAutoSkipTimer = null; }
     playNeighbor(1);
   });
 
@@ -363,6 +376,9 @@ async function pickServer() {
 
 // Perform Search (Fully aligned with app.js)
 async function performSearch(isDeep) {
+  // Cancel any ongoing health check
+  miniHealthCheckAborted = true;
+
   const query = document.getElementById('miniSearchInput').value.trim();
   const codecFilter = document.getElementById('miniFilterCodec').value;
   const bitrateFilter = parseInt(document.getElementById('miniFilterBitrate').value || '0');
@@ -565,6 +581,13 @@ async function performSearch(isDeep) {
 
     activeQueue = searchResults;
     renderResults();
+    // Start health check in background (with error isolation)
+    miniHasAutoPlayed = false;
+    miniAutoPlayScanning = true;
+    miniPrefilterResults().then(() => { miniAutoPlayScanning = false; }).catch(err => {
+      miniAutoPlayScanning = false;
+      console.error('[HEALTHCHECK] prefilter error:', err);
+    });
 
   } catch (err) {
     console.error('Radio Search error:', err);
@@ -636,7 +659,10 @@ function createRadioItem(station, index) {
       }
     </div>
     <div class="radio-card-body">
-      <div class="radio-item-name">${escHtml(station.name)}</div>
+      <div class="radio-item-name">
+        ${escHtml(station.name)}
+        <span class="mini-health-badge checking"><i class="fas fa-spinner fa-spin"></i></span>
+      </div>
       ${tagList.length ? `<div class="radio-item-meta">${tagList.join(', ')}</div>` : ''}
     </div>
     <div class="radio-card-footer">
@@ -644,6 +670,12 @@ function createRadioItem(station, index) {
       <button class="btn-card-fav ${isFav ? 'is-fav' : ''}">${isFav ? '<i class="fas fa-heart"></i>' : '<i class="far fa-heart"></i>'}</button>
     </div>
   `;
+
+  const userPlay = () => {
+    miniAutoSkipCount = 0;
+    if (miniAutoSkipTimer) { clearTimeout(miniAutoSkipTimer); miniAutoSkipTimer = null; }
+    playStation(station);
+  };
 
   div.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
@@ -658,12 +690,12 @@ function createRadioItem(station, index) {
         if (isCurrent && !audio.paused) {
           audio.pause();
         } else {
-          playStation(station);
+          userPlay();
         }
         return;
       }
     }
-    playStation(station);
+    userPlay();
   });
 
   return div;
@@ -713,13 +745,118 @@ function updateFavBadge() {
   document.getElementById('favCount').textContent = playlist.length;
 }
 
+/* ── Health Check ── */
+async function miniCheckStationHealth(url) {
+  try {
+    const ep = getApiUrl(`api/healthcheck?url=${encodeURIComponent(url)}&timeout=${MINI_HEALTH_CHECK_TIMEOUT}`);
+    const res = await fetch(ep);
+    if (!res.ok) return { healthy: false, timeMs: 0, status: res.status };
+    return await res.json();
+  } catch {
+    return { healthy: false, timeMs: 0, status: 0 };
+  }
+}
+
+function miniUpdateHealthBadge(el, result) {
+  const badge = el.querySelector('.mini-health-badge');
+  if (!badge) return;
+  const healthy = result && result.healthy === true;
+  badge.className = `mini-health-badge ${healthy ? 'healthy' : 'unhealthy'}`;
+  badge.innerHTML = healthy
+    ? `<span>✓</span>`
+    : `<span>✗</span>`;
+  if (!healthy) {
+    badge.style.cursor = 'pointer';
+    badge.title = 'Toca para re-verificar';
+    badge.onclick = (e) => {
+      e.stopPropagation();
+      miniRecheckStation(el);
+    };
+  } else {
+    badge.onclick = null;
+    badge.style.cursor = 'default';
+    badge.title = 'Disponible';
+  }
+  const url = el.dataset.url;
+  if (url) miniStationHealth.set(url, healthy);
+}
+
+function miniRecheckStation(el) {
+  const url = el.dataset.url;
+  if (!url) return;
+  const badge = el.querySelector('.mini-health-badge');
+  if (!badge) return;
+  badge.className = 'mini-health-badge checking';
+  badge.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+  miniCheckStationHealth(url).then(result => {
+    miniUpdateHealthBadge(el, result);
+  });
+}
+
+async function miniPrefilterResults() {
+  miniHealthCheckAborted = false;
+  const items = [...document.querySelectorAll('#resultsList .radio-item')];
+  let firstHealthyFound = false;
+
+  for (let i = 0; i < items.length; i += MINI_HEALTH_CONCURRENCY) {
+    if (miniHealthCheckAborted) break;
+    const batch = items.slice(i, i + MINI_HEALTH_CONCURRENCY);
+    const checks = batch.map(async (el) => {
+      if (miniHealthCheckAborted) return;
+      const url = el.dataset.url;
+      if (!url) return;
+      const badge = el.querySelector('.mini-health-badge');
+      if (badge) badge.className = 'mini-health-badge checking';
+      const result = await miniCheckStationHealth(url);
+      if (miniHealthCheckAborted) return;
+      miniUpdateHealthBadge(el, result);
+      const healthy = result && result.healthy === true;
+      if (healthy && !firstHealthyFound && !miniHasAutoPlayed && !miniHealthCheckAborted) {
+        firstHealthyFound = true;
+        miniHasAutoPlayed = true;
+        const station = searchResults.find(s => s.url === url) || playlist.find(s => s.url === url);
+        if (station) {
+          el.classList.add('active');
+          setPlayerStatus('Conectando...', 'loading');
+          playStation(station);
+        }
+      }
+    });
+    await Promise.allSettled(checks);
+  }
+
+  if (!firstHealthyFound && !miniHasAutoPlayed && items.length > 0 && !miniHealthCheckAborted) {
+    setPlayerStatus('Toca una radio', '');
+  }
+  miniHealthCheckAborted = false;
+}
+
+function miniSilentSkip() {
+  if (activeQueue.length === 0) {
+    activeQueue = activeTab === 'results' ? searchResults : playlist;
+  }
+  if (activeQueue.length === 0) return;
+  let idx = -1;
+  if (currentStation) {
+    idx = activeQueue.findIndex(s => s.url === currentStation.url);
+  }
+  let next = idx + 1;
+  if (next < 0) next = 0;
+  if (next >= activeQueue.length) {
+    setPlayerStatus('Sin conexión', '');
+    return;
+  }
+  playStation(activeQueue[next]);
+}
+
 // Sintonize & Play Station
 function playStation(station) {
   if (!station || !station.url) return;
 
-  // Reset auto-skip on manual play
-  miniAutoSkipCount = 0;
-  if (miniAutoSkipTimer) { clearTimeout(miniAutoSkipTimer); miniAutoSkipTimer = null; }
+  // Stop auto-play scanning
+  miniAutoPlayScanning = false;
+  miniHasAutoPlayed = true;
+  miniHealthCheckAborted = true;
 
   currentStation = station;
   localStorage.setItem('mini_last_station', JSON.stringify(station));
@@ -842,11 +979,20 @@ function handleMiniPlaybackError() {
       return;
     }
     miniAutoSkipCount++;
-    setPlayerStatus('SALTANDO...', 'loading');
-    miniAutoSkipTimer = setTimeout(() => {
-      miniAutoSkipTimer = null;
-      playNeighbor(1);
-    }, 1500);
+    if (miniAutoPlayScanning) {
+      // Silent skip during health check auto-play
+      setPlayerStatus('Buscando...', 'loading');
+      miniAutoSkipTimer = setTimeout(() => {
+        miniAutoSkipTimer = null;
+        miniSilentSkip();
+      }, 800);
+    } else {
+      setPlayerStatus('SIGUIENTE...', 'loading');
+      miniAutoSkipTimer = setTimeout(() => {
+        miniAutoSkipTimer = null;
+        playNeighbor(1);
+      }, 2000);
+    }
   }
 }
 

@@ -7,7 +7,9 @@ import re
 import sys
 import os
 import socket
+import ssl
 import sqlite3
+import time
 from scrapling.fetchers import Fetcher
 
 PORT = 8000
@@ -50,6 +52,8 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
             self.handle_websearch()
         elif self.path.startswith("/api/nowplaying"):
             self.handle_nowplaying()
+        elif self.path.startswith("/api/healthcheck"):
+            self.handle_healthcheck()
         elif self.path.startswith("/proxy"):
             self.handle_proxy()
         else:
@@ -304,6 +308,113 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
             return None
 
         return None
+
+    def handle_healthcheck(self):
+        parsed_path = urllib.parse.urlparse(self.path)
+        query_params = urllib.parse.parse_qs(parsed_path.query)
+        target_url = query_params.get("url", [""])[0]
+        timeout = int(query_params.get("timeout", [5])[0])
+
+        if not target_url:
+            self.send_json({"healthy": False, "error": "Missing url parameter"}, 400)
+            return
+
+        start = time.time()
+
+        # 1) Try urllib first
+        try:
+            req = urllib.request.Request(
+                target_url,
+                headers={
+                    "User-Agent": "RadiosApp/1.0",
+                    "Accept": "*/*",
+                    "Icy-MetaData": "1",
+                },
+            )
+            upstream = urllib.request.urlopen(req, timeout=timeout)
+            chunk = upstream.read(1024)
+            upstream.close()
+            elapsed = int((time.time() - start) * 1000)
+            healthy = len(chunk) > 0
+            self.send_json(
+                {
+                    "healthy": healthy,
+                    "time_ms": elapsed,
+                    "status": upstream.status if hasattr(upstream, "status") else 200,
+                }
+            )
+            return
+        except urllib.error.HTTPError as e:
+            elapsed = int((time.time() - start) * 1000)
+            self.send_json(
+                {
+                    "healthy": False,
+                    "time_ms": elapsed,
+                    "status": e.code,
+                    "error": str(e.reason),
+                }
+            )
+            return
+        except Exception:
+            pass  # Fall through to raw socket
+
+        # 2) Raw socket fallback for ICY / problematic streams
+        try:
+            parsed = urllib.parse.urlparse(target_url)
+            host = parsed.hostname
+            port = parsed.port or (443 if parsed.scheme == "https" else 80)
+            path = parsed.path or "/"
+            if parsed.query:
+                path += "?" + parsed.query
+
+            sock = socket.create_connection((host, port), timeout=timeout)
+            if parsed.scheme == "https":
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                sock = ctx.wrap_socket(sock, server_hostname=host)
+
+            request = (
+                f"GET {path} HTTP/1.0\r\n"
+                f"Host: {host}\r\n"
+                f"User-Agent: RadiosApp/1.0\r\n"
+                f"Icy-MetaData: 1\r\n"
+                f"Accept: */*\r\n"
+                f"\r\n"
+            )
+            sock.sendall(request.encode())
+
+            # Read status line + headers
+            data = b""
+            deadline = time.time() + timeout
+            while time.time() < deadline:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                data += chunk
+                if b"\r\n\r\n" in data:
+                    break
+
+            sock.close()
+            elapsed = int((time.time() - start) * 1000)
+            healthy = len(data) > 0
+            self.send_json(
+                {
+                    "healthy": healthy,
+                    "time_ms": elapsed,
+                }
+            )
+            return
+        except Exception as e:
+            elapsed = int((time.time() - start) * 1000)
+            self.send_json(
+                {
+                    "healthy": False,
+                    "time_ms": elapsed,
+                    "error": str(e),
+                }
+            )
+            return
 
     def _peek_icy_metadata(self, stream_url):
         """Quick peek at the stream for ICY metadata without proxying audio."""

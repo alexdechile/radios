@@ -105,6 +105,15 @@ let plDragSrcIndex = -1;
 let autoSkipCount = 0;
 let autoSkipTimer = null;
 
+// Health check state
+const HEALTH_CHECK_TIMEOUT = 6000;
+const HEALTH_CONCURRENCY = 3;
+let stationHealth = new Map();
+let hasAutoPlayed = false;
+let autoPlayScanning = false;
+let hideOffline = false;
+let healthCheckAborted = false;
+
 /* ── Init ── */
 async function init() {
   await checkUpdate();
@@ -276,11 +285,23 @@ async function init() {
     const trackEl = document.getElementById('nowPlayingTrack');
     if (trackEl) trackEl.classList.add('hidden');
   });
-  document.getElementById('btnPrev')?.addEventListener('click', playPrev);
-  document.getElementById('btnNext')?.addEventListener('click', playNext);
+  document.getElementById('btnPrev')?.addEventListener('click', () => {
+    autoSkipCount = 0;
+    if (autoSkipTimer) { clearTimeout(autoSkipTimer); autoSkipTimer = null; }
+    playPrev();
+  });
+  document.getElementById('btnNext')?.addEventListener('click', () => {
+    autoSkipCount = 0;
+    if (autoSkipTimer) { clearTimeout(autoSkipTimer); autoSkipTimer = null; }
+    playNext();
+  });
 
   // Auto-advance on stream end
-  player.on('ended', playNext);
+  player.on('ended', () => {
+    autoSkipCount = 0;
+    if (autoSkipTimer) { clearTimeout(autoSkipTimer); autoSkipTimer = null; }
+    playNext();
+  });
 
   // Event delegation
   document.getElementById('results').addEventListener('click', onResultsClick);
@@ -298,8 +319,16 @@ async function init() {
 
   // Playlist toolbar
   document.getElementById('plSearch')?.addEventListener('input', onPlSearch);
-  document.getElementById('btnPlayAll')?.addEventListener('click', playlistPlayAll);
-  document.getElementById('btnShuffle')?.addEventListener('click', playlistShuffle);
+  document.getElementById('btnPlayAll')?.addEventListener('click', () => {
+    autoSkipCount = 0;
+    if (autoSkipTimer) { clearTimeout(autoSkipTimer); autoSkipTimer = null; }
+    playlistPlayAll();
+  });
+  document.getElementById('btnShuffle')?.addEventListener('click', () => {
+    autoSkipCount = 0;
+    if (autoSkipTimer) { clearTimeout(autoSkipTimer); autoSkipTimer = null; }
+    playlistShuffle();
+  });
 
   // Drag events bound per-item in renderPlaylist()
 
@@ -853,6 +882,9 @@ async function pickServer() {
 
 /* ── Search (multi-strategy) ── */
 async function search(query) {
+  // Cancel any ongoing health check
+  healthCheckAborted = true;
+
   // Switch to results tab automatically
   document.getElementById('tabResults').click();
 
@@ -878,6 +910,12 @@ async function search(query) {
         renderResults(fallbackResults);
         setTimeout(initCarousel, 50);
         container.innerHTML += '<div class="status-msg hint">Solo resultados locales (sin conexión a API)</div>';
+        hasAutoPlayed = false;
+        autoPlayScanning = true;
+        prefilterResults().then(() => { autoPlayScanning = false; }).catch(err => {
+          autoPlayScanning = false;
+          console.error('[HEALTHCHECK] prefilter error:', err);
+        });
       } else {
         container.innerHTML = '<div class="status-msg error">No hay conexión con los servidores de radios y no hay resultados locales.</div>';
       }
@@ -1071,6 +1109,13 @@ async function search(query) {
 
     renderResults([...discoveryResults, ...alreadyFavorited].slice(0, 150));
     setTimeout(initCarousel, 50);
+    // Start health check in background
+    hasAutoPlayed = false;
+    autoPlayScanning = true;
+    prefilterResults().then(() => { autoPlayScanning = false; }).catch(err => {
+      autoPlayScanning = false;
+      console.error('[HEALTHCHECK] prefilter error:', err);
+    });
   } catch {
     container.innerHTML = '<div class="status-msg error">Error al buscar. Intenta de nuevo.</div>'
       + '<div class="status-msg hint">💡 Tip: prueba "80s", "jazz", "rock", "disco", "electro"</div>';
@@ -1130,7 +1175,7 @@ function renderResults(stations, isAppend = false) {
     return;
   }
 
-  const html = stations.map((s) => {
+  const cardsHtml = stations.map((s) => {
     const url = s.url_resolved || s.url || '';
     const name = s.name || 'Sin nombre';
     const tags = s.tags || '';
@@ -1166,7 +1211,10 @@ function renderResults(stations, isAppend = false) {
           }
         </div>
         <div class="station-card-body">
-          <div class="station-name">${name}</div>
+          <div class="station-name">
+            ${name}
+            <span class="health-badge checking" title="Verificando..."><i class="fas fa-spinner fa-spin"></i></span>
+          </div>
           ${tagList.length ? `<div class="station-tags">${tagList.join(', ')}</div>` : ''}
           <div class="station-card-badges">${badgeHtml}</div>
         </div>
@@ -1182,7 +1230,77 @@ function renderResults(stations, isAppend = false) {
     `;
   }).join('');
 
-  container.innerHTML = html;
+  // Build health filter bar (only for initial render)
+  const filterBar = !isAppend ? `
+    <div class="health-filter-bar">
+      <span>${stations.length} resultados</span>
+      <button class="btn-toggle-offline${hideOffline ? ' active' : ''}" id="btnToggleOffline" data-hide="${hideOffline ? '1' : '0'}">
+        <i class="fas fa-${hideOffline ? 'check-circle' : 'circle'}"></i> Solo verificadas
+      </button>
+    </div>` : '';
+
+  container.innerHTML = filterBar + cardsHtml;
+}
+
+/* ── Health Check ── */
+async function checkStationHealth(url) {
+  try {
+    const ep = getApiUrl(`api/healthcheck?url=${encodeURIComponent(url)}&timeout=${HEALTH_CHECK_TIMEOUT}`);
+    const res = await fetch(ep);
+    if (!res.ok) return { healthy: false, timeMs: 0, status: res.status };
+    return await res.json();
+  } catch {
+    return { healthy: false, timeMs: 0, status: 0 };
+  }
+}
+
+function updateHealthBadge(card, result) {
+  const badge = card.querySelector('.health-badge');
+  if (!badge) return;
+  const healthy = result && result.healthy === true;
+  badge.className = `health-badge ${healthy ? 'healthy' : 'unhealthy'}`;
+  badge.innerHTML = healthy
+    ? `<span>✓</span><small>${result.timeMs || 0}ms</small>`
+    : `<span>✗</span><button class="btn-recheck" title="Re-verificar"><i class="fas fa-redo"></i></button>`;
+  const url = card.dataset.url;
+  if (url) stationHealth.set(url, healthy);
+}
+
+async function prefilterResults() {
+  healthCheckAborted = false;
+  const cards = [...document.querySelectorAll('#results .station-card')];
+  let firstHealthyFound = false;
+
+  for (let i = 0; i < cards.length; i += HEALTH_CONCURRENCY) {
+    if (healthCheckAborted) break;
+    const batch = cards.slice(i, i + HEALTH_CONCURRENCY);
+    const checks = batch.map(async (card) => {
+      if (healthCheckAborted) return;
+      const url = card.dataset.url;
+      if (!url) return;
+      const badge = card.querySelector('.health-badge');
+      if (badge) badge.className = 'health-badge checking';
+      const result = await checkStationHealth(url);
+      if (healthCheckAborted) return;
+      updateHealthBadge(card, result);
+      const healthy = result && result.healthy === true;
+      if (healthy && !firstHealthyFound && !hasAutoPlayed && !healthCheckAborted) {
+        firstHealthyFound = true;
+        hasAutoPlayed = true;
+        const name = card.dataset.name;
+        const uuid = card.dataset.uuid;
+        card.classList.add('playing');
+        play(url, name, uuid);
+      }
+    });
+    await Promise.allSettled(checks);
+  }
+
+  if (!firstHealthyFound && !hasAutoPlayed && cards.length > 0 && !healthCheckAborted) {
+    const display = document.getElementById('radioDisplay');
+    if (display) display.textContent = '⚠️ Sin estaciones verificadas - toca una para reproducir';
+  }
+  healthCheckAborted = false;
 }
 
 /* ── Play Radio ── */
@@ -1190,9 +1308,10 @@ function play(url, name, uuid) {
   const audio = document.getElementById('audioPlayer');
   console.log('[PLAY] name=%s uuid=%s url=%s', name, uuid, url);
 
-  // Reset auto-skip on manual play
-  autoSkipCount = 0;
-  if (autoSkipTimer) { clearTimeout(autoSkipTimer); autoSkipTimer = null; }
+  // Stop auto-play scanning
+  autoPlayScanning = false;
+  hasAutoPlayed = true;
+  healthCheckAborted = true;
 
   // Track currently playing station for preset assignment
   currentPlayingStation = { url, name, uuid };
@@ -1329,6 +1448,41 @@ async function startMetadataTracker(uuid, stationUrl) {
 
 /* ── Click on Results ── */
 function onResultsClick(e) {
+  // Health filter toggle
+  if (e.target.closest('#btnToggleOffline')) {
+    hideOffline = !hideOffline;
+    const btn = document.getElementById('btnToggleOffline');
+    if (btn) {
+      btn.dataset.hide = hideOffline ? '1' : '0';
+      btn.className = `btn-toggle-offline${hideOffline ? ' active' : ''}`;
+      btn.innerHTML = `<i class="fas fa-${hideOffline ? 'check-circle' : 'circle'}"></i> Solo verificadas`;
+    }
+    document.querySelectorAll('#results .station-card').forEach(card => {
+      if (!hideOffline) { card.style.display = ''; return; }
+      const badge = card.querySelector('.health-badge');
+      const isHealthy = badge && badge.classList.contains('healthy');
+      const isChecking = badge && badge.classList.contains('checking');
+      card.style.display = isHealthy || isChecking ? '' : 'none';
+    });
+    return;
+  }
+
+  // Re-check individual station
+  if (e.target.closest('.btn-recheck')) {
+    const card = e.target.closest('[data-url]');
+    if (!card) return;
+    const url = card.dataset.url;
+    if (!url) return;
+    const badge = card.querySelector('.health-badge');
+    if (!badge) return;
+    badge.className = 'health-badge checking';
+    badge.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    checkStationHealth(url).then(result => {
+      updateHealthBadge(card, result);
+    });
+    return;
+  }
+
   const card = e.target.closest('[data-url]');
   if (!card) return;
 
@@ -1361,6 +1515,8 @@ function onResultsClick(e) {
     }
   }
 
+  autoSkipCount = 0;
+  if (autoSkipTimer) { clearTimeout(autoSkipTimer); autoSkipTimer = null; }
   document.querySelectorAll('.station-card.playing').forEach(el => el.classList.remove('playing'));
   card.classList.add('playing');
   play(url, name, uuid);
@@ -1379,6 +1535,8 @@ function onPlaylistClick(e) {
   const uuid = item.dataset.uuid;
 
   if (btn.classList.contains('btn-play-small')) {
+    autoSkipCount = 0;
+    if (autoSkipTimer) { clearTimeout(autoSkipTimer); autoSkipTimer = null; }
     document.querySelectorAll('.pl-item').forEach((el) => el.classList.remove('playing'));
     item.classList.add('playing');
     play(url, name, uuid);
@@ -1643,12 +1801,19 @@ function handlePlaybackError() {
       return;
     }
     autoSkipCount++;
-    const display = document.getElementById('radioDisplay');
-    if (display) display.textContent = `⚠️ Error - Saltando a la siguiente... (${autoSkipCount}/${filtered.length})`;
-    autoSkipTimer = setTimeout(() => {
-      autoSkipTimer = null;
-      playNext();
-    }, 1500);
+    if (autoPlayScanning) {
+      autoSkipTimer = setTimeout(() => {
+        autoSkipTimer = null;
+        playNext();
+      }, 800);
+    } else {
+      const display = document.getElementById('radioDisplay');
+      if (display) display.textContent = `⏩ Siguiente... (${autoSkipCount}/${filtered.length})`;
+      autoSkipTimer = setTimeout(() => {
+        autoSkipTimer = null;
+        playNext();
+      }, 2000);
+    }
   }
 }
 

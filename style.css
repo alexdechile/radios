@@ -739,6 +739,85 @@ html, body {
   line-height: 1.3;
 }
 
+/* Health Badge */
+.health-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 4px;
+  cursor: default;
+  transition: all 0.2s;
+}
+.health-badge.checking {
+  color: var(--text-light);
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  animation: health-pulse 1s ease-in-out infinite;
+}
+.health-badge.healthy {
+  color: #2e7d32;
+  background: #e8f5e9;
+  border: 1px solid #a5d6a7;
+}
+.health-badge.unhealthy {
+  color: #c62828;
+  background: #ffebee;
+  border: 1px solid #ef9a9a;
+}
+.health-badge .btn-recheck {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.6rem;
+  padding: 1px 2px;
+  color: inherit;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+.health-badge .btn-recheck:hover {
+  opacity: 1;
+}
+@keyframes health-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Health filter toggle */
+.health-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.btn-toggle-offline {
+  background: var(--bg-soft);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+  font-weight: 600;
+}
+.btn-toggle-offline:hover {
+  border-color: var(--sage);
+  color: var(--text-primary);
+  background: var(--sage-light);
+}
+.btn-toggle-offline.active {
+  border-color: var(--sage);
+  color: #2e7d32;
+  background: #e8f5e9;
+}
+
 .btn-add-card, .btn-dismiss-card {
   background: transparent;
   border: 1px solid var(--border);

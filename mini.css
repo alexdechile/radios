@@ -522,6 +522,34 @@ body {
   line-height: 1.3;
 }
 
+/* Mini Health Badge */
+.mini-health-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  font-size: 0.65rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  vertical-align: middle;
+  transition: all 0.2s;
+}
+.mini-health-badge.checking {
+  color: var(--text-light);
+  animation: mini-health-pulse 1s ease-in-out infinite;
+}
+.mini-health-badge.healthy {
+  color: #2e7d32;
+  background: #e8f5e9;
+}
+.mini-health-badge.unhealthy {
+  color: #c62828;
+  background: #ffebee;
+}
+@keyframes mini-health-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
 .radio-item-meta {
   font-size: 0.7rem;
   color: var(--text-secondary);
