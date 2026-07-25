@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Logs
+*.log
+
+# Runtime databases (no curadas)
+radios.db
+
+# Playlists generadas en runtime
+playlists/
+
+# Sistema
+.directory
+.DS_Store

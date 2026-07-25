@@ -2,23 +2,8 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Radios App</title>
-
-  <script>
-    // Detección de iPhone 6 / Pantallas pequeñas / Safari Móvil
-    (function() {
-      if (localStorage.getItem('force_classic_version') === 'true') {
-        return;
-      }
-      var isSmallScreen = window.innerWidth > 0 && window.innerWidth < 480;
-      var isIphoneSafari = /iPhone|iPod/.test(navigator.userAgent) && /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS|OPiOS|mercury/.test(navigator.userAgent);
-      
-      if (isSmallScreen || isIphoneSafari) {
-        window.location.replace('mini.html');
-      }
-    })();
-  </script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -28,8 +13,11 @@
 
   <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css">
 
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=1.6.0">
   <link rel="manifest" href="manifest.json">
+
+  <!-- HTMX — polling automático sin escribir JS -->
+  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js" defer></script>
 </head>
 <body>
 
@@ -38,36 +26,262 @@
 
       <div class="app-header">
         <div class="app-header-left">
-          <i class="fas fa-tower-broadcast"></i>
-          <span>Radios</span>
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.2" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="6" width="18" height="13" rx="3"/>
+            <rect x="5" y="8.5" width="9" height="6" rx="1.5" opacity="0.5"/>
+            <circle cx="17.5" cy="11.5" r="2.2"/>
+            <circle cx="17.5" cy="11.5" r="0.6" fill="currentColor" opacity="0.4"/>
+            <line x1="12" y1="6" x2="15" y2="2" stroke-width="0.8" stroke-linecap="round"/>
+            <circle cx="15" cy="2" r="0.8" fill="currentColor"/>
+          </svg>
         </div>
         <div class="app-header-actions">
+          <button class="btn-header" id="btnSearchToggle" title="Buscar"><i class="fas fa-search"></i></button>
           <button class="btn-header" id="btnExportJSON" title="Guardar lista como JSON">JSON</button>
           <button class="btn-header" id="btnImportJSON" title="Cargar lista desde JSON"><i class="fas fa-folder-open"></i></button>
           <button class="btn-header" id="btnExportM3U" title="Exportar como M3U"><i class="fas fa-file-export"></i></button>
           <button class="btn-header" id="btnCopyPlaylist" title="Copiar playlist al portapapeles"><i class="fas fa-clipboard"></i></button>
-          <button class="btn-header" id="btnMobileVersion" title="Versión Móvil"><i class="fas fa-mobile-screen-button"></i></button>
           <button class="btn-header" id="btnEqToggle" title="Ecualizador"><i class="fas fa-sliders"></i></button>
           <button class="btn-header" id="btnEffectsToggle" title="Efectos de Audio"><i class="fas fa-wand-magic-sparkles"></i></button>
+          <button class="btn-header" id="btnInfoToggle" title="Info del popup"><i class="fas fa-circle-info"></i></button>
           <button class="btn-header" id="btnHardRefresh" title="Actualizar"><i class="fas fa-rotate"></i></button>
+          <button class="btn-header" id="btnDeepSearch" title="Búsqueda profunda"><i class="fas fa-globe"></i></button>
         </div>
+    <!-- Shared EQ Panel (absolute overlay, slides from below header) -->
+    <div id="eqPanel" class="eq-panel hidden">
+      <div class="eq-header">
+        <span class="eq-title"><i class="fas fa-wave-square"></i> Ecualizador</span>
+        <div class="eq-presets">
+          <button class="btn-eq-preset" data-preset="flat">FLAT</button>
+          <button class="btn-eq-preset" data-preset="bass">BASS</button>
+          <button class="btn-eq-preset" data-preset="vocal">VOZ</button>
+          <button class="btn-eq-preset" data-preset="treble">AGUDOS</button>
+        </div>
+      </div>
+      <div class="eq-bands">
+        <div class="eq-band">
+          <div class="eq-band-label">60Hz</div>
+          <div class="eq-slider-wrap">
+            <input type="range" id="eqBand0" class="eq-slider" min="-12" max="12" value="0" step="0.5" orient="vertical">
+            <div class="eq-center-line"></div>
+          </div>
+          <div class="eq-band-value" id="eqVal0">0</div>
+        </div>
+        <div class="eq-band">
+          <div class="eq-band-label">250Hz</div>
+          <div class="eq-slider-wrap">
+            <input type="range" id="eqBand1" class="eq-slider" min="-12" max="12" value="0" step="0.5" orient="vertical">
+            <div class="eq-center-line"></div>
+          </div>
+          <div class="eq-band-value" id="eqVal1">0</div>
+        </div>
+        <div class="eq-band">
+          <div class="eq-band-label">1kHz</div>
+          <div class="eq-slider-wrap">
+            <input type="range" id="eqBand2" class="eq-slider" min="-12" max="12" value="0" step="0.5" orient="vertical">
+            <div class="eq-center-line"></div>
+          </div>
+          <div class="eq-band-value" id="eqVal2">0</div>
+        </div>
+        <div class="eq-band">
+          <div class="eq-band-label">4kHz</div>
+          <div class="eq-slider-wrap">
+            <input type="range" id="eqBand3" class="eq-slider" min="-12" max="12" value="0" step="0.5" orient="vertical">
+            <div class="eq-center-line"></div>
+          </div>
+          <div class="eq-band-value" id="eqVal3">0</div>
+        </div>
+        <div class="eq-band">
+          <div class="eq-band-label">16kHz</div>
+          <div class="eq-slider-wrap">
+            <input type="range" id="eqBand4" class="eq-slider" min="-12" max="12" value="0" step="0.5" orient="vertical">
+            <div class="eq-center-line"></div>
+          </div>
+          <div class="eq-band-value" id="eqVal4">0</div>
+        </div>
+      </div>
+    </div>
+    <!-- Shared Effects Panel (absolute overlay, slides from below header) -->
+    <div id="effectsPanel" class="effects-panel hidden">
+      <div class="effects-header">
+        <span class="effects-title"><i class="fas fa-wand-magic-sparkles"></i> Efectos de Audio</span>
+        <button class="btn-effects-reset" id="btnEffectsReset" title="Resetear todos los efectos">Normal</button>
+      </div>
+      <div class="effects-body">
+        <div class="effect-row">
+          <div class="effect-label">
+            <i class="fas fa-arrows-left-right"></i> Stereo Width
+          </div>
+          <div class="effect-control">
+            <input type="range" id="stereoWidthSlider" class="effect-slider" min="0" max="200" value="100" step="1">
+            <span class="effect-value" id="stereoWidthVal">100%</span>
+          </div>
+        </div>
+        <div class="effect-row">
+          <div class="effect-label">
+            <i class="fas fa-expand"></i> Surround
+          </div>
+          <div class="effect-control">
+            <label class="effect-toggle">
+              <input type="checkbox" id="surroundToggle">
+              <span class="effect-toggle-slider"></span>
+            </label>
+            <span class="effect-toggle-label" id="surroundStatus">OFF</span>
+          </div>
+        </div>
+        <div class="effect-row">
+          <div class="effect-label">
+            <i class="fas fa-bolt"></i> Bass Boost
+          </div>
+          <div class="effect-control">
+            <label class="effect-toggle">
+              <input type="checkbox" id="bassBoostToggle">
+              <span class="effect-toggle-slider"></span>
+            </label>
+            <span class="effect-toggle-label" id="bassBoostStatus">OFF</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Shared Info Panel (absolute overlay, slides from below header) -->
+    <div id="infoPanel" class="info-panel hidden">
+      <div class="info-header">
+        <span class="info-title"><i class="fas fa-circle-info"></i> Info del Popup</span>
+        <button class="btn-info-reset" id="btnInfoReset" title="Restaurar valores">Todo</button>
+      </div>
+      <div class="info-body">
+        <div class="info-row">
+          <div class="info-label">
+            <i class="fas fa-image"></i> Portada
+          </div>
+          <div class="info-control">
+            <label class="info-toggle">
+              <input type="checkbox" id="infoCoverToggle" checked>
+              <span class="info-toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">
+            <i class="fas fa-align-left"></i> Descripción
+          </div>
+          <div class="info-control">
+            <label class="info-toggle">
+              <input type="checkbox" id="infoDescToggle" checked>
+              <span class="info-toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">
+            <i class="fas fa-feather"></i> Compositores
+          </div>
+          <div class="info-control">
+            <label class="info-toggle">
+              <input type="checkbox" id="infoWriterToggle" checked>
+              <span class="info-toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">
+            <i class="fas fa-microphone"></i> Productor
+          </div>
+          <div class="info-control">
+            <label class="info-toggle">
+              <input type="checkbox" id="infoProducerToggle" checked>
+              <span class="info-toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">
+            <i class="fas fa-tag"></i> Sello / Duración
+          </div>
+          <div class="info-control">
+            <label class="info-toggle">
+              <input type="checkbox" id="infoMetaToggle" checked>
+              <span class="info-toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">
+            <i class="fas fa-link"></i> Link Wikipedia
+          </div>
+          <div class="info-control">
+            <label class="info-toggle">
+              <input type="checkbox" id="infoWikiLinkToggle" checked>
+              <span class="info-toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">
+            <i class="fas fa-music"></i> Letra (Lyrics)
+          </div>
+          <div class="info-control">
+            <label class="info-toggle">
+              <input type="checkbox" id="infoLyricsToggle" checked>
+              <span class="info-toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">
+            <i class="fas fa-magnifying-glass-plus"></i> Escala UI (Zoom)
+          </div>
+          <div class="info-control" style="display: flex; align-items: center; gap: 8px;">
+            <input type="range" id="uiScaleSlider" min="70" max="160" value="100" style="width: 80px; accent-color: #667eea; cursor: pointer;">
+            <span id="uiScaleValue" style="font-size: 0.85rem; font-weight: 600; min-width: 38px; color: var(--text-primary);">100%</span>
+            <button id="btnResetUiScale" title="Restaurar zoom al 100%" style="background: none; border: none; cursor: pointer; color: var(--text-secondary); padding: 2px 4px;"><i class="fas fa-rotate-left"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Shared Search Panel (absolute overlay, slides from below header) -->
+    <div id="searchPanel" class="search-panel hidden">
+      <div class="search-panel-header">
+        <div class="search-panel-input-wrap" id="searchPanelInputWrap">
+          <input type="text" id="searchPanelInput" list="searchPanelDefaults" placeholder="Buscar o elegir opción..." autocomplete="off">
+          <datalist id="searchPanelDefaults">
+            <option value="morning">morning</option>
+            <option value="easy">easy</option>
+            <option value="vintage">vintage</option>
+            <option value="70">70</option>
+            <option value="80">80</option>
+            <option value="sleep">sleep</option>
+            <option value="afternoon">afternoon</option>
+          </datalist>
+          <button class="search-panel-clear" id="searchPanelClear" title="Limpiar"><i class="fas fa-times"></i></button>
+          <button class="search-panel-dropdown-toggle" id="searchPanelDropdownToggle" title="Búsquedas por defecto"><i class="fas fa-chevron-down"></i></button>
+
+          <!-- Dropdown menu with default searches -->
+          <div id="searchPanelDropdown" class="search-panel-dropdown hidden">
+            <div class="search-dropdown-header"><i class="fas fa-list-ul"></i> Búsquedas por defecto</div>
+            <div class="search-dropdown-item" data-value="morning"><i class="fas fa-sun"></i> morning</div>
+            <div class="search-dropdown-item" data-value="easy"><i class="fas fa-mug-hot"></i> easy</div>
+            <div class="search-dropdown-item" data-value="vintage"><i class="fas fa-record-vinyl"></i> vintage</div>
+            <div class="search-dropdown-item" data-value="70"><i class="fas fa-compact-disc"></i> 70</div>
+            <div class="search-dropdown-item" data-value="80"><i class="fas fa-bolt"></i> 80</div>
+            <div class="search-dropdown-item" data-value="sleep"><i class="fas fa-moon"></i> sleep</div>
+            <div class="search-dropdown-item" data-value="afternoon"><i class="fas fa-cloud-sun"></i> afternoon</div>
+          </div>
+        </div>
+        <button class="search-panel-deep" id="searchPanelDeep" title="Búsqueda profunda"><i class="fas fa-globe"></i></button>
+      </div>
+      <div id="searchPanelResults" class="search-panel-results">
+        <div class="search-panel-placeholder">
+          <i class="fas fa-search"></i>
+          <p>Busca emisoras por nombre, género o país.</p>
+        </div>
+      </div>
+    </div>
       </div>
 
       <div class="player-section">
         <div class="player-display">
-          <!-- Presets de emisoras estilo radio de auto -->
-          <div class="station-presets" id="stationPresets">
-            <div class="sp-label">PRESETS</div>
-            <div class="sp-grid">
-              <button class="sp-btn" id="sp0" data-idx="0"><span class="sp-num">1</span><span class="sp-name">—</span></button>
-              <button class="sp-btn" id="sp1" data-idx="1"><span class="sp-num">2</span><span class="sp-name">—</span></button>
-              <button class="sp-btn" id="sp2" data-idx="2"><span class="sp-num">3</span><span class="sp-name">—</span></button>
-              <button class="sp-btn" id="sp3" data-idx="3"><span class="sp-num">4</span><span class="sp-name">—</span></button>
-              <button class="sp-btn" id="sp4" data-idx="4"><span class="sp-num">5</span><span class="sp-name">—</span></button>
-              <button class="sp-btn" id="sp5" data-idx="5"><span class="sp-num">6</span><span class="sp-name">—</span></button>
-            </div>
-            <div class="sp-hint" id="spHint">Mant. puls. para guardar</div>
-          </div>
+
           <div class="player-info">
             <div class="player-time-row">
               <button class="btn-timer-toggle" id="btnTimerToggle" title="Temporizador / Despertador">
@@ -82,152 +296,51 @@
               <span id="alarmIndicator" class="timer-indicator-badge alarm-active hidden"></span>
               <span id="timerIndicator" class="timer-indicator-badge hidden"></span>
               <span id="plCount">0 radios</span>
-              <span>44 kHz</span>
             </div>
           </div>
         </div>
 
-        <div class="now-playing" id="radioDisplay">Radios App — Listo para sintonizar...</div>
+        <!-- HTMX Now Playing Bar — minicard unificado (está sonando) -->
+        <div id="htmxNowPlaying"
+             class="htmx-now-playing"
+             hx-get="/api/nowplaying-fragment"
+             hx-trigger="every 15s"
+             hx-swap="innerHTML"
+             hx-indicator="#htmxNpIndicator">
+          <div class="htmx-np-inner htmx-np-idle">
+            <span class="htmx-np-pulse">&#9835;</span>
+            <div class="htmx-np-texts">
+              <span class="htmx-np-station">Radios App</span>
+              <span class="htmx-np-title">Selecciona una emisora para comenzar</span>
+              <span class="htmx-np-subtitle"><i class="fas fa-sparkles"></i> Transmisión en vivo y metadatos</span>
+            </div>
+          </div>
+        </div>
+        <div id="htmxNpIndicator" class="htmx-np-indicator htmx-indicator"></div>
+
+        <!-- Elementos ocultos para evitar romper referencias JS -->
+        <div class="now-playing hidden" id="radioDisplay">Radios App</div>
         <div class="now-playing-track hidden" id="nowPlayingTrack">
           <span class="npt-icon"><i class="fas fa-music"></i></span>
           <span class="npt-text" id="nowPlayingTrackText"></span>
         </div>
 
-        <div class="search-bar">
-          <div class="search-wrapper">
-            <input type="text" id="searchInput" placeholder="Buscar emisoras..." autocomplete="off">
-            <button class="search-clear" id="searchClear" title="Limpiar"><i class="fas fa-times"></i></button>
-            <div id="searchHistory" class="search-history-dropdown hidden"></div>
-          </div>
-          <select id="filterBitrate" class="filter-select" title="Bitrate">
-            <option value="0">Qual</option>
-            <option value="128">128k</option>
-            <option value="192">192k</option>
-          </select>
-          <select id="filterCodec" class="filter-select" title="Codec">
-            <option value="">Codec</option>
-            <option value="MP3">MP3</option>
-            <option value="AAC">AAC</option>
-          </select>
-          <button id="btnDeepSearch" class="btn-deep" title="Búsqueda profunda"><i class="fas fa-globe"></i></button>
-        </div>
-      </div>
-
-      <!-- Mini EQ Panel (car radio style) -->
-      <div id="eqPanel" class="eq-panel hidden">
-        <div class="eq-header">
-          <span class="eq-title"><i class="fas fa-wave-square"></i> Ecualizador</span>
-          <div class="eq-presets">
-            <button class="btn-eq-preset" data-preset="flat">FLAT</button>
-            <button class="btn-eq-preset" data-preset="bass">BASS</button>
-            <button class="btn-eq-preset" data-preset="vocal">VOZ</button>
-            <button class="btn-eq-preset" data-preset="treble">AGUDOS</button>
-          </div>
-        </div>
-        <div class="eq-bands">
-          <div class="eq-band">
-            <div class="eq-band-label">60Hz</div>
-            <div class="eq-slider-wrap">
-              <input type="range" id="eqBand0" class="eq-slider" min="-12" max="12" value="0" step="0.5" orient="vertical">
-              <div class="eq-center-line"></div>
-            </div>
-            <div class="eq-band-value" id="eqVal0">0</div>
-          </div>
-          <div class="eq-band">
-            <div class="eq-band-label">250Hz</div>
-            <div class="eq-slider-wrap">
-              <input type="range" id="eqBand1" class="eq-slider" min="-12" max="12" value="0" step="0.5" orient="vertical">
-              <div class="eq-center-line"></div>
-            </div>
-            <div class="eq-band-value" id="eqVal1">0</div>
-          </div>
-          <div class="eq-band">
-            <div class="eq-band-label">1kHz</div>
-            <div class="eq-slider-wrap">
-              <input type="range" id="eqBand2" class="eq-slider" min="-12" max="12" value="0" step="0.5" orient="vertical">
-              <div class="eq-center-line"></div>
-            </div>
-            <div class="eq-band-value" id="eqVal2">0</div>
-          </div>
-          <div class="eq-band">
-            <div class="eq-band-label">4kHz</div>
-            <div class="eq-slider-wrap">
-              <input type="range" id="eqBand3" class="eq-slider" min="-12" max="12" value="0" step="0.5" orient="vertical">
-              <div class="eq-center-line"></div>
-            </div>
-            <div class="eq-band-value" id="eqVal3">0</div>
-          </div>
-          <div class="eq-band">
-            <div class="eq-band-label">16kHz</div>
-            <div class="eq-slider-wrap">
-              <input type="range" id="eqBand4" class="eq-slider" min="-12" max="12" value="0" step="0.5" orient="vertical">
-              <div class="eq-center-line"></div>
-            </div>
-            <div class="eq-band-value" id="eqVal4">0</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Effects Panel -->
-      <div id="effectsPanel" class="effects-panel hidden">
-        <div class="effects-header">
-          <span class="effects-title"><i class="fas fa-wand-magic-sparkles"></i> Efectos de Audio</span>
-          <button class="btn-effects-reset" id="btnEffectsReset" title="Resetear todos los efectos">Normal</button>
-        </div>
-        <div class="effects-body">
-          <div class="effect-row">
-            <div class="effect-label">
-              <i class="fas fa-arrows-left-right"></i> Stereo Width
-            </div>
-            <div class="effect-control">
-              <input type="range" id="stereoWidthSlider" class="effect-slider" min="0" max="200" value="100" step="1">
-              <span class="effect-value" id="stereoWidthVal">100%</span>
-            </div>
-          </div>
-          <div class="effect-row">
-            <div class="effect-label">
-              <i class="fas fa-expand"></i> Surround
-            </div>
-            <div class="effect-control">
-              <label class="effect-toggle">
-                <input type="checkbox" id="surroundToggle">
-                <span class="effect-toggle-slider"></span>
-              </label>
-              <span class="effect-toggle-label" id="surroundStatus">OFF</span>
-            </div>
-          </div>
-          <div class="effect-row">
-            <div class="effect-label">
-              <i class="fas fa-bolt"></i> Bass Boost
-            </div>
-            <div class="effect-control">
-              <label class="effect-toggle">
-                <input type="checkbox" id="bassBoostToggle">
-                <span class="effect-toggle-slider"></span>
-              </label>
-              <span class="effect-toggle-label" id="bassBoostStatus">OFF</span>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div class="controls-section">
-        <!-- Visualizador de frecuencias (tira delgada) -->
-        <div class="viz-strip">
-          <canvas id="equalizer" class="equalizer-canvas"></canvas>
-        </div>
         <div class="transport-buttons">
-          <button class="btn-transport" id="btnPrev"><i class="fas fa-backward-step"></i></button>
-          <button class="btn-transport play-main" id="btnPlayWinamp"><i class="fas fa-play"></i></button>
-          <button class="btn-transport" id="btnPause"><i class="fas fa-pause"></i></button>
-          <button class="btn-transport" id="btnStop"><i class="fas fa-stop"></i></button>
-          <button class="btn-transport" id="btnNext"><i class="fas fa-forward-step"></i></button>
+          <button class="btn-transport" id="btnPrev" title="Anterior"><i class="fas fa-backward-step"></i></button>
+          <button class="btn-transport play-main" id="btnPlayWinamp" title="Reproducir"><i class="fas fa-play"></i></button>
+          <button class="btn-transport" id="btnPause" title="Pausa"><i class="fas fa-pause"></i></button>
+          <button class="btn-transport" id="btnStop" title="Detener"><i class="fas fa-stop"></i></button>
+          <button class="btn-transport" id="btnNext" title="Siguiente"><i class="fas fa-forward-step"></i></button>
+          <span class="transport-divider"></span>
+          <button class="btn-transport btn-playlist-toggle" id="btnPlaylistToggle" title="Playlist / Favoritos"><i class="fas fa-list-ul"></i></button>
         </div>
 
-        <div class="tab-bar">
-          <button class="tab-btn active" id="tabResults">RESULTADOS</button>
-          <button class="tab-btn" id="tabPlaylist">PLAYLIST</button>
-        </div>
+        <!-- Botones ocultos para compatibilidad de eventos en JS -->
+        <button id="tabResults" class="hidden"></button>
+        <button id="tabPlaylist" class="hidden"></button>
       </div>
 
 <div class="content-area">
@@ -310,10 +423,83 @@
         </div>
       </div>
     </div>
+
+    <!-- Song Info Popup -->
+    <div class="song-popup-overlay hidden" id="songPopupOverlay">
+      <div class="song-popup" id="songPopup">
+        <div class="song-popup-header">
+          <span class="song-popup-icon"><i class="fas fa-compact-disc"></i></span>
+          <span class="song-popup-title">Está Sonando</span>
+          <button class="song-popup-add-btn" id="popupAddBtn" title="Agregar a playlist"><i class="fas fa-plus"></i></button>
+          <button class="song-popup-close-btn" id="popupCloseBtn" title="Cerrar"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="song-popup-body" id="songPopupBody">
+          <div class="song-popup-media-row" id="popupMediaRow">
+            <div class="song-popup-cover-wrap hidden" id="popupCoverWrap">
+              <img class="song-popup-cover" id="popupCover" alt="Portada">
+            </div>
+            <div class="song-popup-titles">
+              <div class="song-popup-track" id="popupTrack"></div>
+              <div class="song-popup-artist" id="popupArtist"></div>
+            </div>
+          </div>
+          <div class="song-popup-desc hidden" id="popupDesc"></div>
+          <div class="song-popup-details" id="popupDetails"></div>
+          <div class="song-popup-extras" id="popupExtras"></div>
+          <a class="song-popup-wiki-link hidden" id="popupWikiLink" target="_blank" rel="noopener">
+            <i class="fab fa-wikipedia-w"></i> Ver en Wikipedia
+          </a>
+          <div class="song-popup-lyrics hidden" id="popupLyricsWrap">
+            <button class="song-popup-lyrics-toggle" id="popupLyricsToggle" type="button">
+              <span class="lyrics-toggle-left"><i class="fas fa-music"></i> Letra</span>
+              <i class="fas fa-chevron-down lyrics-toggle-chevron"></i>
+            </button>
+            <div class="song-popup-lyrics-body hidden" id="popupLyricsBody">
+              <div class="song-popup-lyrics-status" id="popupLyricsStatus"></div>
+              <pre class="song-popup-lyrics-text" id="popupLyricsText"></pre>
+            </div>
+          </div>
+          <div class="song-popup-actions">
+            <button class="popup-vote-btn popup-vote-like" id="popupVoteLike" title="Me gusta">
+              <i class="fas fa-thumbs-up"></i>
+            </button>
+            <button class="popup-vote-btn popup-vote-dislike" id="popupVoteDislike" title="No me gusta">
+              <i class="fas fa-thumbs-down"></i>
+            </button>
+          </div>
+        </div>
+        <div class="song-popup-footer"></div>
+      </div>
+    </div>
   </main>
 
   <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=1.6.0"></script>
+
+  <!-- HTMX Bridge: actualiza hx-get con URL+nombre de la estación activa -->
+  <script>
+    // Función global llamada por app.js cuando arranca una radio
+    window.htmxNowPlayingUpdate = function(url, name, favicon) {
+      const bar = document.getElementById('htmxNowPlaying');
+      if (!bar) return;
+      const prefix = window.location.pathname.startsWith('/radios') ? '/radios' : '';
+      const apiUrl = prefix + '/api/nowplaying-fragment'
+        + '?url=' + encodeURIComponent(url)
+        + '&name=' + encodeURIComponent(name || 'Radio')
+        + '&favicon=' + encodeURIComponent(favicon || '');
+      bar.setAttribute('hx-get', apiUrl);
+      // Lanzar primera petición inmediatamente (no esperar 15s)
+      htmx.trigger(bar, 'htmx:load');
+      htmx.ajax('GET', apiUrl, { target: bar, swap: 'innerHTML' });
+    };
+
+    window.htmxNowPlayingIdle = function() {
+      const bar = document.getElementById('htmxNowPlaying');
+      if (!bar) return;
+      bar.removeAttribute('hx-get');
+      bar.innerHTML = '<div class="htmx-np-inner htmx-np-idle"><span class="htmx-np-pulse">&#9835;</span><div class="htmx-np-texts"><span class="htmx-np-station">Radios App</span><span class="htmx-np-title">Selecciona una emisora para comenzar</span><span class="htmx-np-subtitle"><i class="fas fa-sparkles"></i> Transmisión en vivo y metadatos</span></div></div>';
+    };
+  </script>
 
 </body>
 </html>

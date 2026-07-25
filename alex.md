@@ -1,6 +1,77 @@
 # Radios App - DonAlex Homelab
 
 ## Último Realizado
+- [x] **Letras (Lyrics) en el Modal "Está Sonando"** (2026-07-25):
+  - Nueva sección **"Letra"** colapsable dentro del popup de información de la canción, con carga *lazy* (solo consulta al expandir).
+  - Nuevo endpoint backend `GET /api/lyrics` en `server.py` con dos fuentes: **lyrics.ovh** (API gratuita, principal) y **scraping de Genius** vía `scrapling` (fallback).
+  - Cache en SQLite (tabla `lyrics_cache`): letras encontradas se guardan 30 días; las no encontradas se reintentan tras 1 día para evitar golpear las fuentes.
+  - Limpieza de `feat.`/`ft.` en artista/título para mejorar la tasa de coincidencia.
+  - Toggle **"Letra (Lyrics)"** en el Info Panel para mostrar/ocultar la sección (persistido en `localStorage`).
+  - El auto-cierre de 30s del modal se cancela mientras se lee la letra; estilos acordes al tema oscuro/dorado con scroll suave para Safari móvil.
+  - Nota legal: letras obtenidas bajo demanda de fuentes públicas y cacheadas localmente, sin redistribución masiva.
+- [x] **Gestos Multi-táctiles y Zoom de UI Fluido (Pinch to Zoom)** (2026-07-25):
+  - Implementado sistema de escalado/zoom dinámico de la interfaz entre **70% y 160%** mediante el gesto táctil de dos dedos (**Pinch to Zoom**).
+  - Permite expandir o condensar la app para adaptarse perfectamente a diferentes tamaños de pantalla (desde displays pequeños/embebidos hasta tablets y monitores grandes).
+  - Indicador flotante en pantalla (*Zoom Toast Overlay*) con diseño esmerilado que muestra en tiempo real el porcentaje de escala ajustado (`Escala UI: 115%`).
+  - Doble toque de 2 dedos (*Double Tap*) restablece instantáneamente la escala al 100% por defecto.
+  - Integrado control deslizante (*slider*) y botón de reseteo en el panel de **Info / Configuración** para control manual.
+  - Persistencia automática de la preferencia en `localStorage` (`radios_ui_scale`) de forma independiente para cada dispositivo.
+- [x] **Búsquedas por defecto con Dropdown editable** (2026-07-21):
+  - Incorporado un desplegable editable (combobox dropdown) al campo de búsqueda en el panel de búsqueda (`#searchPanelInputWrap`).
+  - Incluidas las 7 búsquedas por defecto solicitadas: `morning`, `easy`, `vintage`, `70`, `80`, `sleep`, `afternoon`.
+  - Integrado selector visual con iconos FontAwesome (`fas fa-sun`, `fas fa-mug-hot`, `fas fa-record-vinyl`, `fas fa-compact-disc`, `fas fa-bolt`, `fas fa-moon`, `fas fa-cloud-sun`) y botón chevron con animación de rotación en `style.css`.
+  - Soporte nativo adicional mediante HTML5 `<datalist id="searchPanelDefaults">` para autocompletado en navegadores y dispositivos móviles.
+  - El usuario puede seleccionar cualquiera de las opciones por defecto o escribir cualquier término personalizado de manera libre.
+  - Filtrado en tiempo real de las opciones del desplegable al escribir, cierre automático con `Escape` o al hacer clic fuera del campo.
+  - Corregido el recorte (`overflow: hidden`) del contenedor `.search-panel` en `style.css` cambiándolo a `overflow: visible`, lo que permite que el desplegable flote libremente y de forma visible por encima del resto de la interfaz.
+  - Simplificación del Player: eliminado el texto redundante de muestreo (`44 kHz`), ocultada la barra duplicada (`.now-playing-track`) y unificada la información en el minicard principal (`#htmxNowPlaying`).
+  - Al hacer clic o tocar el minicard (`#htmxNowPlaying`), se gatilla directamente la apertura del modal detallado de "Está Sonando" (`fetchSongInfo`), manteniendo toda la interacción en una sola tarjeta compacta.
+  - Minicard de 3 líneas: reestructurado el snippet (`server.py` e `index.html`) para mostrar Línea 1 (Radio), Línea 2 (Canción) y Línea 3 (Indicación/Subtítulo) de forma limpia.
+  - Tamaño de kbps/radios (`.player-stats`): aumentado a `1.8rem` para igualar de manera exacta al reloj de tiempo (`.player-time`).
+  - Botones de transporte (Play, Pausa, etc.): condensados en un 25% menos de altura vertical y ampliados un 10% en ancho (`min-width: 48px` / `58px`), corregidas las reglas dentro de las media queries `@media (min-width: 600px)` y `@media (max-height: 670px)` para asegurar que el cambio surta efecto en todas las resoluciones.
+  - Bloqueo de Modal para títulos genéricos: creada la función `isGenericOrArtifactTitle` en `app.js` para evitar abrir el modal o consultar metadatos cuando la radio retorne textos por defecto como *"Icecast Streaming media server"*, *"Shoutcast"*, *"Unspecified"*, etc.
+  - Filtrado de contenido *"Sponsored"*: eliminadas las radios de prueba patrocinadas de la lista inicial y aplicado un filtro en `renderResults` para omitir cualquier emisora cuyo nombre, tag o URL contenga la palabra *"sponsored"*.
+  - Optimización de espacio vertical: eliminada la barra de pestañas fija (`.tab-bar` con RESULTADOS/PLAYLIST) ganando ~38px de alto en pantalla. En su lugar se integró el botón de Playlist (`<i class="fas fa-list-ul"></i>`) directo en la botonera de transporte separado por divisor vertical (`.transport-divider`). La búsqueda activa automáticamente la vista de resultados.
+  - Reestructuración y priorización de metadatos de canciones (`MusicBrainz` + `Wikipedia`):
+    - **Causa raíz descubierta**: Las consultas a MusicBrainz en `server.py` estaban fallando silenciosamente por un fallo en la codificación de la consulta Lucene (`urllib.parse.quote`), lo que causaba un fallback constante hacia Wikipedia.
+    - **Prioridad absoluta**: MusicBrainz pasa a ser la fuente principal de datos estructurados. Se expandió la extracción para obtener el **Sello discográfico** (`label`), **Compositores/Autores** (`writer`), **Año**, **Álbum**, **Duración** y **Géneros**.
+    - **Mezcla con Wikipedia**: Wikipedia ahora se consulta únicamente para complementar con la síntesis biográfica/histórica (`description`), enlace (`wiki_url`) o portada de respaldo, sin sobreescribir los datos fácticos de MusicBrainz.
+    - Limpiada la tabla de caché `song_cache` en `radios_curated.db` para refrescar todas las canciones con los nuevos metadatos enriquecidos.
+- [x] **Integración HTMX — Panel "Ahora Suena" con polling automático** (2026-07-21):
+  - Nuevo endpoint `/api/nowplaying-fragment` en `server.py` que devuelve HTML fragmentado (en vez de JSON).
+  - Panel `#htmxNowPlaying` en `index.html` con atributos `hx-get`, `hx-trigger="every 15s"` y `hx-swap="innerHTML"` — cero JS adicional para el polling.
+  - Bridge `window.htmxNowPlayingUpdate()` en `index.html` llamado desde `app.js` al iniciar reproducción, actualiza el `hx-get` con la URL y nombre de la estación activa.
+  - Tres estados visuales: **activo** (canción detectada, verde), **esperando** (sintonizando, ocre) e **idle** (sin radio, gris punteado).
+  - Badge **LIVE** rojo pulsante, favicon de la radio, nota musical animada (♫), e indicador de carga punto verde.
+  - HTMX cargado desde CDN (`unpkg.com/htmx.org@2.0.4`). Sin rotura de funcionalidad existente.
+- [x] **Corrección de Popup "Está Sonando" y Metadatos**:
+  - Corregido bug donde el popup "Está Sonando" y la sección de metadatos de canción actual desaparecían en streams locales, listas importadas y radios del Deep Search.
+  - Se desacopló la consulta de metadatos ICY (`/api/nowplaying`) del flujo exclusivo de `radio-browser.info`, permitiendo que el tracker de metadatos se active para cualquier estación que tenga un stream URL.
+  - Se movió la resolución de servidor de `radio-browser` (`pickServer()`) dentro de la función `fetchMeta`, evitando bloqueos y permitiendo actualizaciones en tiempo real del tema que suena en todos los tipos de emisoras.
+- [x] **Popup "Está Sonando" con Wikipedia, MusicBrainz y Like/Dislike**:
+  - Popup vertical con portada, track/artist, descripción, badges, extras (writer, producer, label, length), link Wikipedia y botones Like/Dislike con toggle persistente.
+  - Backend expandido: parser de infobox con writer/producer/label/length/description/thumbnail/wiki_url, Wikipedia REST summary, MusicBrainz fallback (cover art, genres, ISRC, length).
+  - Tabla `feedback` en SQLite con endpoint `POST /api/feedback` (toggle on/off del mismo voto).
+  - Panel "Info del Popup" con 6 toggle switches (portada, descripción, badges, extras, wiki link, sección DJ), persistencia en localStorage.
+  - Click en track now-playing abre popup, auto-cierre a los 30s.
+- [x] **Playlist local con metadatos enriquecidos**:
+  - Botón `+` en popup guarda la canción directo a `playlists/radio.json` con metadatos completos (title, artist, album, genre, year, duration, label, added_at).
+  - Sin llamadas externas — Radios solo crea la playlist, DJ la resuelve después.
+  - Endpoint `POST /api/playlist/save` con detección de duplicados.
+  - Eliminados los endpoints proxy `/api/dj-search` y `/api/dj-add`.
+- [x] **Fix loop de Service Worker**:
+  - URL del SW cambiada de `sw.js?v=1.2.0` a `sw.js` (sin version param) para evitar ciclo infinito de refresco.
+  - Mantenido `skipWaiting()` + `controllerchange` → reload (se estabiliza tras un ciclo).
+- [x] **Redirección de Resultados de Búsqueda al Carrusel Principal**:
+  - Ocultado el contenedor `#searchPanelResults` en `style.css` para que el panel de búsqueda sea más compacto y no duplique los resultados.
+  - Modificada la interacción de búsqueda en `app.js` (`initSearchPanel`) para que la búsqueda se gatille automáticamente a partir del segundo carácter introducido (`q.length >= 2`).
+  - Removido el llamado a `renderSearchPanelOverlay` y su definición en `app.js`, ya que los resultados ahora se presentan de forma exclusiva en el carrusel principal (`#results`).
+  - Implementada lógica de restauración automática en el carrusel de resultados para cargar los favoritos/playlist por defecto cuando el campo de búsqueda se limpie o tenga menos de 2 caracteres.
+  - Corregido bug donde el panel de búsqueda se cerraba automáticamente al escribir el segundo carácter. La búsqueda simulaba un clic en `#tabResults` para mostrar los resultados, lo cual gatillaba el detector de "clics fuera del panel". Ahora el listener de cierre por clic exterior ignora eventos programáticos mediante la verificación de confianza (`!e.isTrusted`).
+- [x] **Corrección de header deslizable en Safari (iOS/macOS)**:
+  - Cambiado `.app-header-actions` de `flex-shrink: 0` a `flex-shrink: 1` con `min-width: 0` en `style.css` para permitir que el contenedor se reduzca al tamaño de pantalla disponible y active su scroll horizontal.
+  - Modificada la función `initHorizontalDrag` in `app.js` eliminando los listeners de touch (`touchstart`, `touchmove`, `touchend`) para delegar el scroll táctil al comportamiento nativo de Safari (momentum scrolling). Esto soluciona los tirones y hace que los botones del header respondan instantáneamente al tacto.
+  - Añadido un interceptor de `click` en la fase de captura dentro de `initHorizontalDrag` para evitar clicks accidentales en botones o tarjetas al arrastrar horizontalmente con el mouse en pantallas de escritorio.
 - [x] **Paridad de Funcionalidades entre Versión Clásica y Versión Mini**:
   - **Temporizador de Apagado y Despertador (Mini)**: Implementado el panel modal y lógica de temporizador (Sleep Timer con presets/personalizado) y despertador (alarma programable) en la versión Mini (`mini.html`, `mini.js`, `mini.css`), con sincronización de la emisora elegida y visualización de badges de cuenta regresiva/reloj apilados verticalmente de forma compacta.
   - **Ecualizador de 5 bandas (Mini)**: Añadido el panel de ecualización de 5 bandas (60Hz, 250Hz, 1kHz, 4kHz, 16kHz) con presets (FLAT/BASS/VOZ/AGUDOS) y conexión real al Web Audio API en la versión Mini, optimizando el control táctil con sliders horizontales compactos integrados en la pestaña de Efectos.

@@ -1,13 +1,13 @@
-const CACHE_NAME = 'radios-sketch-v1.1.1';
+const CACHE_NAME = 'radios-sketch-v1.6.0';
 const ASSETS = [
   '/radios/',
-  '/radios/index.html',
-  '/radios/style.css',
-  '/radios/app.js',
+  '/radios/index.html?v=1.6.0',
+  '/radios/style.css?v=1.6.0',
+  '/radios/app.js?v=1.6.0',
   '/radios/radios_db.json'
 ];
 
-// Install: Cache new assets
+// Install: Cache new assets (activate immediately for fresh content)
 self.addEventListener('install', (e) => {
   self.skipWaiting();
   e.waitUntil(
