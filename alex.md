@@ -1,6 +1,11 @@
 # Radios App - DonAlex Homelab
 
 ## Último Realizado
+- [x] **Optimización de PWA y Buffer de Audio** (2026-07-26):
+  - Generación de iconos PNG (192x192 y 512x512) para el `manifest.json` mejorando la compatibilidad PWA (especialmente en iOS/Safari).
+  - Configuración de `sizes: "any"` para el icono SVG en el manifest.
+  - Inclusión de meta etiquetas (`theme-color` y `apple-touch-icon`) en el `index.html`.
+  - Aumento del tamaño del chunk de proxy en `server.py` de 8KB a 64KB para proporcionar un buffer más generoso y mejorar la estabilidad ante pequeñas variaciones de conexión.
 - [x] **Letras (Lyrics) en el Modal "Está Sonando"** (2026-07-25):
   - Nueva sección **"Letra"** colapsable dentro del popup de información de la canción, con carga *lazy* (solo consulta al expandir).
   - Nuevo endpoint backend `GET /api/lyrics` en `server.py` con dos fuentes: **lyrics.ovh** (API gratuita, principal) y **scraping de Genius** vía `scrapling` (fallback).
