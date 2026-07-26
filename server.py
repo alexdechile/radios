@@ -1566,7 +1566,7 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
 
             while True:
                 try:
-                    chunk = sock.recv(8192)
+                    chunk = sock.recv(65536)
                     if not chunk:
                         break
                     self.wfile.write(chunk)
@@ -1607,7 +1607,7 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
 
         bytes_sent = 0
         while True:
-            chunk = upstream.read(8192)
+            chunk = upstream.read(65536)
             if not chunk:
                 break
             try:
