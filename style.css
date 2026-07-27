@@ -639,8 +639,49 @@ html, body {
   flex-direction: column;
   gap: 8px;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
   justify-content: center;
 }
+.station-name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.station-name-row .btn-play-card {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  margin: 0;
+  background: var(--sage-light);
+  border: 1.5px solid var(--sage);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.station-name-row .btn-play-card:hover {
+  background: var(--sage);
+  color: white;
+}
+
+.station-card.playing .station-name-row .btn-play-card {
+  background: #FF6B35;
+  border-color: #FF6B35;
+  color: white;
+}
+
+.station-name-row .station-name {
+  flex: 1;
+  min-width: 0;
+}
+
 .station-name {
   font-weight: 700;
   font-size: 1.2rem;
@@ -650,6 +691,7 @@ html, body {
   -webkit-box-orient: vertical;
   overflow: hidden;
   line-height: 1.3;
+  white-space: normal;
 }
 .station-tags {
   font-size: 0.85rem;
@@ -1008,8 +1050,40 @@ html, body {
 .pl-info {
   flex: 1;
   display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.pl-name-row {
+  display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+.pl-name-row .btn-play-small {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  margin: 0;
+  background: var(--sage-light);
+  border: 1.5px solid var(--sage);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.pl-name-row .btn-play-small:hover {
+  background: var(--sage);
+  color: white;
+}
+.pl-item.playing .pl-name-row .btn-play-small {
+  background: #FF6B35;
+  border-color: #FF6B35;
+  color: white;
 }
 
 .app-footer {
@@ -2390,6 +2464,11 @@ html, body {
   }
   .station-card-body {
     padding: 8px 10px;
+  }
+  .station-name-row .btn-play-card {
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
   }
   .station-name {
     font-size: 0.9rem;

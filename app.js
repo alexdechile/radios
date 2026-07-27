@@ -1099,15 +1099,17 @@ function renderResults(stations, isAppend = false) {
           }
         </div>
         <div class="station-card-body">
-          <div class="station-name">
-            ${name}
-            <span class="health-badge checking" title="Verificando..."><i class="fas fa-spinner fa-spin"></i></span>
+          <div class="station-name-row">
+            <button class="btn-play-card" title="Reproducir"><i class="fas fa-play"></i></button>
+            <div class="station-name">
+              ${name}
+              <span class="health-badge checking" title="Verificando..."><i class="fas fa-spinner fa-spin"></i></span>
+            </div>
           </div>
           ${tagList.length ? `<div class="station-tags">${tagList.join(', ')}</div>` : ''}
           <div class="station-card-badges">${badgeHtml}</div>
         </div>
         <div class="station-card-footer">
-          <button class="btn-play-card" title="Reproducir"><i class="fas fa-play"></i></button>
           ${inPl
             ? `<button class="btn-add-card is-fav" title="Quitar de playlist"><i class="fas fa-heart"></i></button>`
             : `<button class="btn-add-card" title="Agregar a playlist"><i class="fas fa-plus"></i></button>`
@@ -1685,7 +1687,10 @@ function renderPlaylist() {
           : `<div class="pl-favicon-placeholder"><i class="fas fa-radio"></i></div>`
         }
         <div class="pl-info">
-          <span class="pl-name">${escHtml(s.name || 'Sin nombre')}</span>
+          <div class="pl-name-row">
+            <button class="btn btn-play-small" title="Reproducir"><i class="fas fa-play"></i></button>
+            <span class="pl-name">${escHtml(s.name || 'Sin nombre')}</span>
+          </div>
           <div class="pl-meta">
             ${s.bitrate ? `<span class="badge badge-bitrate">${s.bitrate}k</span>` : ''}
             ${s.codec ? `<span class="badge badge-codec">${s.codec}</span>` : ''}
@@ -1694,7 +1699,6 @@ function renderPlaylist() {
           </div>
         </div>
         <div class="pl-actions">
-          <button class="btn btn-play-small" title="Reproducir"><i class="fas fa-play"></i></button>
           <button class="btn btn-remove" title="Eliminar"><i class="fas fa-times"></i></button>
         </div>
       </div>`;

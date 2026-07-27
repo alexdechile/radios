@@ -708,14 +708,16 @@ function createRadioItem(station, index) {
       }
     </div>
     <div class="radio-card-body">
-      <div class="radio-item-name">
-        ${escHtml(station.name)}
-        <span class="mini-health-badge checking"><i class="fas fa-spinner fa-spin"></i></span>
+      <div class="radio-name-row">
+        <button class="btn-card-play">${(isCurrent && !audio.paused) ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>'}</button>
+        <div class="radio-item-name">
+          ${escHtml(station.name)}
+          <span class="mini-health-badge checking"><i class="fas fa-spinner fa-spin"></i></span>
+        </div>
       </div>
       ${tagList.length ? `<div class="radio-item-meta">${tagList.join(', ')}</div>` : ''}
     </div>
     <div class="radio-card-footer">
-      <button class="btn-card-play">${(isCurrent && !audio.paused) ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>'}</button>
       <button class="btn-card-fav ${isFav ? 'is-fav' : ''}">${isFav ? '<i class="fas fa-heart"></i>' : '<i class="far fa-heart"></i>'}</button>
     </div>
   `;

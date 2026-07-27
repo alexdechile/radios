@@ -407,10 +407,10 @@ body {
   gap: 4px;
 }
 
-#sectionPlaylist .btn-card-play {
-  width: 30px;
-  height: 30px;
-  font-size: 0.75rem;
+#sectionPlaylist .radio-name-row .btn-card-play {
+  width: 26px;
+  height: 26px;
+  font-size: 0.7rem;
 }
 #sectionPlaylist .btn-card-fav {
   width: 26px;
@@ -511,6 +511,37 @@ body {
   min-height: 0;
 }
 
+.radio-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.radio-name-row .btn-card-play {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  margin: 0;
+  background: var(--sage-light);
+  border: 1.5px solid var(--sage);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.radio-name-row .btn-card-play:hover {
+  background: var(--sage);
+  color: white;
+}
+.radio-item.active .radio-name-row .btn-card-play {
+  background: #FF6B35;
+  border-color: #FF6B35;
+  color: white;
+}
 .radio-item-name {
   font-weight: 700;
   font-size: 0.9rem;
@@ -520,6 +551,8 @@ body {
   -webkit-box-orient: vertical;
   overflow: hidden;
   line-height: 1.3;
+  flex: 1;
+  min-width: 0;
 }
 
 /* Mini Health Badge */
