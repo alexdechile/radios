@@ -1692,6 +1692,42 @@ html, body {
   border-color: var(--lavender);
 }
 
+/* ── Noticias por Voz ── */
+.news-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.btn-news-toggle {
+  background: var(--sky-light);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-news-toggle:hover {
+  background: var(--sky);
+  color: white;
+  border-color: var(--sky);
+}
+
+.btn-news-toggle.active {
+  background: #b8e6b8;
+  border-color: #5cb85c;
+  color: #155724;
+}
+
+.btn-news-toggle.active:hover {
+  background: #a3d9a3;
+}
+
 /* ══════════════════════════════════════════════
    EQ PANEL — Car Radio Style
    ══════════════════════════════════════════════ */

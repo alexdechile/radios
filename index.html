@@ -372,6 +372,9 @@
         <audio id="audioPlayer" playsinline></audio>
       </div>
 
+      <!-- TTS oculto para noticias por voz -->
+      <audio id="ttsPlayer" preload="auto" style="display:none"></audio>
+
       <!-- Modal de Temporizador / Despertador -->
       <div id="timerModal" class="timer-modal">
         <div class="timer-modal-content">
@@ -402,7 +405,7 @@
             </div>
             
             <hr class="modal-divider">
-            
+
             <!-- Sección Despertador (Hora de Encendido) -->
             <div class="timer-section-group">
               <h4><i class="fas fa-bell"></i> Despertador (Hora de Encendido)</h4>
@@ -419,6 +422,20 @@
               </div>
               <div class="timer-status" id="alarmStatus">
                 <span>Alarma desactivada.</span>
+              </div>
+            </div>
+
+            <hr class="modal-divider">
+
+            <!-- Sección Noticias por Voz -->
+            <div class="timer-section-group">
+              <h4><i class="fas fa-newspaper"></i> Noticias por Voz</h4>
+              <p class="section-desc">Cada hora en punto, una voz leerá las últimas noticias sobre la radio.</p>
+              <div class="news-controls">
+                <button class="btn-news-toggle" id="btnToggleNews">Activar</button>
+              </div>
+              <div class="timer-status" id="newsStatus">
+                <span>Noticias desactivadas.</span>
               </div>
             </div>
           </div>

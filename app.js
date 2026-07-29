@@ -85,6 +85,12 @@ let alarmStation = localStorage.getItem('radios_alarm_station') || 'current';
 let lastAlarmTriggeredDate = '';
 let alarmCheckerInterval = null;
 
+// News-by-voice state
+let newsEnabled = localStorage.getItem('radios_news_enabled') === 'true';
+let lastNewsHour = -1;
+let duckGain = null;
+let newsPlaying = false;
+
 // Playlist navigation state
 let plFilterText = '';
 let plCurrentIndex = -1;
@@ -303,6 +309,9 @@ async function init() {
   // Init Timer & Alarm
   initTimerAndAlarm();
 
+  // Init News-by-Voice
+  initNewsFeature();
+
   // Init EQ Panel UI
   initEqPanel();
 
@@ -356,7 +365,11 @@ function initEqualizer() {
       node = filter;
     }
     node = createEffectsChain(node);
-    node.connect(audioCtx.destination);
+    // Duck node for news voice-over
+    duckGain = audioCtx.createGain();
+    duckGain.gain.value = 1.0;
+    node.connect(duckGain);
+    duckGain.connect(audioCtx.destination);
   } catch (e) {
     audioCtx = null;
     eqFilters = [];
@@ -1282,6 +1295,12 @@ function play(url, name, uuid) {
     initEqualizer();
   } catch (e) {
     console.error('Equalizer error:', e);
+  }
+
+  // Reset duck gain if it was left ducked by news
+  if (duckGain) {
+    duckGain.gain.cancelScheduledValues(audioCtx.currentTime);
+    duckGain.gain.setValueAtTime(1.0, audioCtx.currentTime);
   }
 
   // Play
@@ -2230,11 +2249,12 @@ function initTimerAndAlarm() {
     });
   }
 
-  // Start checking loop for alarm and updating timer countdown
+  // Start checking loop for alarm, sleep timer, and news
   if (alarmCheckerInterval) clearInterval(alarmCheckerInterval);
   alarmCheckerInterval = setInterval(() => {
     checkAlarm();
     updateSleepCountdown();
+    checkNewsHour();
   }, 1000);
 
   // Update initial UI state
@@ -2465,6 +2485,107 @@ function triggerAlarm() {
       const fallback = SPONSORED_STATIONS[0];
       play(fallback.url, fallback.name, fallback.uuid);
     }
+  }
+}
+
+/* ── Noticias por Voz ── */
+function initNewsFeature() {
+  const btnToggle = document.getElementById('btnToggleNews');
+  const statusDiv = document.getElementById('newsStatus');
+
+  if (btnToggle) {
+    btnToggle.textContent = newsEnabled ? 'Desactivar' : 'Activar';
+    btnToggle.classList.toggle('active', newsEnabled);
+
+    btnToggle.addEventListener('click', () => {
+      newsEnabled = !newsEnabled;
+      localStorage.setItem('radios_news_enabled', newsEnabled ? 'true' : 'false');
+      btnToggle.textContent = newsEnabled ? 'Desactivar' : 'Activar';
+      btnToggle.classList.toggle('active', newsEnabled);
+      if (statusDiv) {
+        statusDiv.innerHTML = newsEnabled
+          ? '<span class="news-active">📰 Próximas noticias a la hora en punto.</span>'
+          : '<span>Noticias desactivadas.</span>';
+        statusDiv.classList.toggle('active', newsEnabled);
+      }
+    });
+  }
+
+  if (statusDiv) {
+    if (newsEnabled) {
+      statusDiv.innerHTML = '<span class="news-active">📰 Próximas noticias a la hora en punto.</span>';
+      statusDiv.classList.add('active');
+    }
+  }
+}
+
+function checkNewsHour() {
+  if (!newsEnabled) return;
+  if (newsPlaying) return;
+  if (!currentPlayingStation) return;
+  if (!player || !player.playing) return;
+
+  const now = new Date();
+  const hour = now.getHours();
+  const min = now.getMinutes();
+
+  if (min === 0 && lastNewsHour !== hour) {
+    lastNewsHour = hour;
+    triggerNews();
+  }
+}
+
+function duckRadio(shouldDuck) {
+  if (!duckGain || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  duckGain.gain.cancelScheduledValues(now);
+  duckGain.gain.setValueAtTime(duckGain.gain.value, now);
+  duckGain.gain.linearRampToValueAtTime(shouldDuck ? 0.12 : 1.0, now + 0.5);
+}
+
+async function triggerNews() {
+  if (!currentPlayingStation) return;
+
+  try {
+    const res = await fetch(getApiUrl('/api/news'));
+    if (!res.ok) return;
+    const data = await res.json();
+    const text = data.text || '';
+    if (!text) return;
+
+    newsPlaying = true;
+
+    duckRadio(true);
+
+    const ttsAudio = document.getElementById('ttsPlayer');
+    if (!ttsAudio) {
+      newsPlaying = false;
+      return;
+    }
+
+    ttsAudio.src = getApiUrl('/api/tts?text=' + encodeURIComponent(text));
+    ttsAudio.load();
+
+    ttsAudio.oncanplay = () => {
+      ttsAudio.play().catch(() => {
+        duckRadio(false);
+        newsPlaying = false;
+      });
+    };
+
+    ttsAudio.onerror = () => {
+      duckRadio(false);
+      newsPlaying = false;
+    };
+
+    ttsAudio.onended = () => {
+      duckRadio(false);
+      newsPlaying = false;
+      ttsAudio.src = '';
+    };
+  } catch (e) {
+    duckRadio(false);
+    newsPlaying = false;
   }
 }
 

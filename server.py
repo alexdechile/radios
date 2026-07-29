@@ -10,11 +10,17 @@ import socket
 import ssl
 import sqlite3
 import time
+import subprocess
+import hashlib
+import threading
 from datetime import datetime, timedelta
 from scrapling.fetchers import Fetcher
 
 PORT = 8000
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "radios_curated.db")
+TTS_VENV_PYTHON = "/home/alexdechile/.openclaw/tmp/tts-venv/bin/python"
+TTS_VOICE = "es-CL-CatalinaNeural"
+TTS_CACHE_DIR = "/tmp/radios_tts_cache"
 
 
 def init_db():
@@ -118,6 +124,10 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
                 self.handle_nowplaying_fragment()
             elif self.path.startswith("/api/nowplaying"):
                 self.handle_nowplaying()
+            elif self.path.startswith("/api/news"):
+                self.handle_news()
+            elif self.path.startswith("/api/tts"):
+                self.handle_tts()
             elif self.path.startswith("/api/healthcheck"):
                 self.handle_healthcheck()
             elif self.path.startswith("/proxy"):
@@ -1428,6 +1438,77 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
                 s.close()
             except Exception:
                 pass
+
+    def handle_news(self):
+        news = {
+            "text": (
+                "Estas son las noticias más importantes. "
+                "El Congreso aprobó la nueva ley de reforma tributaria. "
+                "La selección chilena se prepara para el próximo partido. "
+                "Y el clima para hoy: cielos despejados en la zona central. "
+                "Estas fueron las noticias."
+            )
+        }
+        self.send_json(news)
+
+    def handle_tts(self):
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+        text = params.get("text", [""])[0]
+
+        if not text:
+            self.send_json({"error": "No text provided"}, 400)
+            return
+
+        # Ensure cache dir exists
+        os.makedirs(TTS_CACHE_DIR, exist_ok=True)
+
+        text_hash = hashlib.md5(text.encode()).hexdigest()[:16]
+        output_path = os.path.join(TTS_CACHE_DIR, f"{text_hash}.mp3")
+
+        if not os.path.exists(output_path):
+            safe_text = text.replace("'", "\\'")
+            code = (
+                "import asyncio; import edge_tts; "
+                f"asyncio.run(edge_tts.Communicate('{safe_text}', '{TTS_VOICE}').save('{output_path}'))"
+            )
+            try:
+                subprocess.run(
+                    [TTS_VENV_PYTHON, "-c", code],
+                    capture_output=True,
+                    timeout=30,
+                    text=True,
+                )
+            except subprocess.TimeoutExpired:
+                self.send_json({"error": "TTS generation timed out"}, 500)
+                return
+
+            if not os.path.exists(output_path):
+                self.send_json({"error": "TTS generation failed"}, 500)
+                return
+
+            # Schedule cleanup after 5 minutes
+            def cleanup():
+                time.sleep(300)
+                try:
+                    os.remove(output_path)
+                except OSError:
+                    pass
+
+            threading.Thread(target=cleanup, daemon=True).start()
+
+        try:
+            with open(output_path, "rb") as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "audio/mpeg")
+            self.send_header("Content-Length", str(len(content)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "public, max-age=3600")
+            self.end_headers()
+            self.wfile.write(content)
+        except Exception as e:
+            self.send_json({"error": str(e)}, 500)
 
     def send_json(self, data, status=200):
         try:
