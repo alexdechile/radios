@@ -2,10 +2,11 @@
 
 ## Último Realizado
 - [x] **Noticiero Comerza — Noticias Reales cada 30 min** (2026-07-28):
-  - Script `scripts/noticiero.py` que scrapea RSS de Cooperativa.cl (sección País), filtra titulares del día (hora chilena), prioriza accidentes/tránsito/policial por keywords, y genera `noticiero.json` con el libreto "Noticiero Comerza. [titulares]. Estas fueron las noticias. Gracias por sintonizarnos."
-  - `GET /api/news` ahora lee `noticiero.json` (cache 25 min), si está vencido ejecuta el script automáticamente. Fallback mantiene placeholder.
-  - Scheduler en frontend cada 30 min (minuto :00 y :30), con chequeo de segundo exacto para evitar disparos múltiples.
-  - Al final del noticiero, Catalina añade cierre personalizado: "Sigamos escuchando a [Artista] con [Canción], en [Radio]." — lee del DOM real del reproductor.
+  - Script `scripts/noticiero.py` multfuente: Cooperativa.cl RSS (sección País, keyword-scored) + Ex-Ante.cl scrape (headlines `<h3>`). Genera `noticiero.json` con libreto "Noticiero Comerza. [titulares]... Gracias por sintonizarnos."
+  - Servidor ejecuta noticiero.py en background a las :20 y :50 (10 min antes de cada emisión) vía thread daemon.
+  - `GET /api/news` lee `noticiero.json` cacheado (25 min TTL), con fallback inline.
+  - Scheduler frontend solo entre 08:30-18:00, triggers a :00 y :30 (segundo exacto).
+  - Catalina añade cierre: "Sigamos escuchando a [Artista] con [Canción], en [Radio]." + frase positiva aleatoria (20 frases) al final.
   - Voz `es-CL-CatalinaNeural` via edge-tts, cacheada por hash.
 - [x] **Optimización de PWA y Buffer de Audio** (2026-07-26):
   - Generación de iconos PNG (192x192 y 512x512) para el `manifest.json` mejorando la compatibilidad PWA (especialmente en iOS/Safari).
