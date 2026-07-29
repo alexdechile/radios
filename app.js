@@ -2504,7 +2504,7 @@ function initNewsFeature() {
       btnToggle.classList.toggle('active', newsEnabled);
       if (statusDiv) {
         statusDiv.innerHTML = newsEnabled
-          ? '<span class="news-active">📰 Próximas noticias cada 5 min.</span>'
+          ? '<span class="news-active">📰 Próximo noticiero a las :00 o :30.</span>'
           : '<span>Noticias desactivadas.</span>';
         statusDiv.classList.toggle('active', newsEnabled);
       }
@@ -2513,7 +2513,7 @@ function initNewsFeature() {
 
   if (statusDiv) {
     if (newsEnabled) {
-      statusDiv.innerHTML = '<span class="news-active">📰 Próximas noticias cada 5 min.</span>';
+      statusDiv.innerHTML = '<span class="news-active">📰 Próximo noticiero a las :00 o :30.</span>';
       statusDiv.classList.add('active');
     }
   }
@@ -2526,9 +2526,11 @@ function checkNewsHour() {
   if (!player || !player.playing) return;
 
   const now = new Date();
-  const slot = Math.floor(now.getMinutes() / 5);
+  const slot = Math.floor(now.getMinutes() / 30);
+  const sec = now.getSeconds();
 
-  if (lastNewsHour !== slot) {
+  // Trigger at second 0 of each half-hour for consistency
+  if (lastNewsHour !== slot && sec === 0) {
     lastNewsHour = slot;
     triggerNews();
   }
@@ -2549,8 +2551,33 @@ async function triggerNews() {
     const res = await fetch(getApiUrl('/api/news'));
     if (!res.ok) return;
     const data = await res.json();
-    const text = data.text || '';
+    let text = data.text || '';
     if (!text) return;
+
+    // Append musical sign-off
+    const titleEl = document.querySelector('.htmx-np-title');
+    const stationEl = document.querySelector('.htmx-np-station');
+    let signoff = '';
+
+    if (titleEl && stationEl) {
+      const song = titleEl.textContent.trim();
+      const station = stationEl.textContent.trim();
+      if (song && song !== 'Selecciona una emisora para comenzar' && !isGenericOrArtifactTitle(song)) {
+        // Try to parse as "Artist - Title"
+        const parts = song.split(' - ');
+        if (parts.length >= 2) {
+          signoff = ` Sigamos escuchando a ${parts[0]} con ${parts.slice(1).join(' - ')}, en ${station}.`;
+        } else {
+          signoff = ` Sigamos escuchando "${song}", en ${station}.`;
+        }
+      } else if (station && station !== 'Radios App') {
+        signoff = ` Sigamos escuchando ${station}.`;
+      }
+    }
+
+    if (signoff) {
+      text += signoff;
+    }
 
     newsPlaying = true;
 

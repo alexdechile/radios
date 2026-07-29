@@ -1,14 +1,12 @@
 # Radios App - DonAlex Homelab
 
 ## Último Realizado
-- [x] **Noticias por Voz cada Hora** (2026-07-28):
-  - Nuevo endpoint backend `GET /api/news` que entrega texto placeholder de noticias (reemplazable después por script real).
-  - Nuevo endpoint backend `GET /api/tts` que genera audio MP3 con `edge-tts` (voz `es-CL-CatalinaNeural`) y lo cachea por hash.
-  - Audio ducking: `GainNode` insertado en la cadena Web Audio API para bajar el volumen de la radio (a 0.12) mientras suenan las noticias, con transición suave de 500ms.
-  - Segunda etiqueta `<audio id="ttsPlayer">` oculta para reproducir el TTS sin interferir con la cadena Web Audio de la radio.
-  - Scheduler que cada hora en punto (minutos=0) detecta si hay una radio sonando y dispara las noticias.
-  - Toggle "Noticias por Voz" en el modal de temporizadores con persistencia en localStorage.
-  - TTS cacheado por 1 hora (Cache-Control) + limpieza automática a los 5 minutos.
+- [x] **Noticiero Comerza — Noticias Reales cada 30 min** (2026-07-28):
+  - Script `scripts/noticiero.py` que scrapea RSS de Cooperativa.cl (sección País), filtra titulares del día (hora chilena), prioriza accidentes/tránsito/policial por keywords, y genera `noticiero.json` con el libreto "Noticiero Comerza. [titulares]. Estas fueron las noticias. Gracias por sintonizarnos."
+  - `GET /api/news` ahora lee `noticiero.json` (cache 25 min), si está vencido ejecuta el script automáticamente. Fallback mantiene placeholder.
+  - Scheduler en frontend cada 30 min (minuto :00 y :30), con chequeo de segundo exacto para evitar disparos múltiples.
+  - Al final del noticiero, Catalina añade cierre personalizado: "Sigamos escuchando a [Artista] con [Canción], en [Radio]." — lee del DOM real del reproductor.
+  - Voz `es-CL-CatalinaNeural` via edge-tts, cacheada por hash.
 - [x] **Optimización de PWA y Buffer de Audio** (2026-07-26):
   - Generación de iconos PNG (192x192 y 512x512) para el `manifest.json` mejorando la compatibilidad PWA (especialmente en iOS/Safari).
   - Configuración de `sizes: "any"` para el icono SVG en el manifest.
@@ -124,6 +122,10 @@ Ofrece una interfaz retro con estética nostálgica basada en **Winamp**, incluy
   - *Versión Mini*: Reproductor de audio HTML5 nativo de bajo consumo para maximizar compatibilidad en navegadores antiguos (iOS 12).
 - **Backend/Servidor**: Python `http.server` personalizado en `server.py` escuchando en el puerto 8000.
 - **Scraper / Deep Search**: Python `scrapling` para la obtención inteligente de streams de audio desde DuckDuckGo en `/api/websearch` y mediante `scripts/spider.py` en un entorno virtual (`./venv`).
+- **Noticiero por Voz**: 
+  - Script `scripts/noticiero.py` que scrapea RSS de Cooperativa.cl y genera `noticiero.json`.
+  - TTS con `edge-tts` (voz `es-CL-CatalinaNeural`) desde `/home/alexdechile/.openclaw/tmp/tts-venv/`.
+  - Audio ducking via Web Audio API `GainNode` en la cadena de ecualización.
 - **Integración Homelab**:
   - Servido a través de Nginx (`/etc/nginx/nginx.conf`) redirigiendo `/radios/` hacia `http://localhost:8000`.
   - Habilitado como servicio systemd de usuario: `radios-app.service`.

@@ -21,6 +21,13 @@ DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "radios_curat
 TTS_VENV_PYTHON = "/home/alexdechile/.openclaw/tmp/tts-venv/bin/python"
 TTS_VOICE = "es-CL-CatalinaNeural"
 TTS_CACHE_DIR = "/tmp/radios_tts_cache"
+NOTICIERO_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "noticiero.json"
+)
+NOTICIERO_SCRIPT = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "scripts", "noticiero.py"
+)
+NEWS_CACHE_TTL = 25  # minutes
 
 
 def init_db():
@@ -1440,16 +1447,49 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
                 pass
 
     def handle_news(self):
-        news = {
-            "text": (
-                "Estas son las noticias más importantes. "
-                "El Congreso aprobó la nueva ley de reforma tributaria. "
-                "La selección chilena se prepara para el próximo partido. "
-                "Y el clima para hoy: cielos despejados en la zona central. "
-                "Estas fueron las noticias."
+        # 1) Try reading cached noticiero.json
+        if os.path.exists(NOTICIERO_PATH):
+            try:
+                age = time.time() - os.path.getmtime(NOTICIERO_PATH)
+                if age < NEWS_CACHE_TTL * 60:
+                    with open(NOTICIERO_PATH, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if data.get("text"):
+                        self.send_json(data)
+                        return
+            except Exception:
+                pass
+
+        # 2) Stale or missing — run noticiero.py
+        self._run_noticiero()
+
+        # 3) Read again
+        if os.path.exists(NOTICIERO_PATH):
+            try:
+                with open(NOTICIERO_PATH, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if data.get("text"):
+                    self.send_json(data)
+                    return
+            except Exception:
+                pass
+
+        # 4) Fallback
+        self.send_json(
+            {
+                "text": "Noticiero Comerza. No pudimos obtener las noticias en este momento. Estas fueron las noticias. Gracias por sintonizarnos."
+            }
+        )
+
+    def _run_noticiero(self):
+        try:
+            subprocess.run(
+                [sys.executable, NOTICIERO_SCRIPT],
+                capture_output=True,
+                timeout=30,
             )
-        }
-        self.send_json(news)
+        except Exception as e:
+            print(f"[server] noticiero.py failed: {e}", file=sys.stderr)
 
     def handle_tts(self):
         parsed = urllib.parse.urlparse(self.path)
