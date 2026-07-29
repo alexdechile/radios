@@ -2531,7 +2531,7 @@ function initNewsFeature() {
       btnToggle.classList.toggle('active', newsEnabled);
       if (statusDiv) {
         statusDiv.innerHTML = newsEnabled
-          ? '<span class="news-active">📰 Próximo noticiero a las :00 o :30 (08:30-18:00).</span>'
+          ? '<span class="news-active">📰 Próximo: 15:07 (prueba única de sonido).</span>'
           : '<span>Noticias desactivadas.</span>';
         statusDiv.classList.toggle('active', newsEnabled);
       }
@@ -2540,7 +2540,7 @@ function initNewsFeature() {
 
   if (statusDiv) {
     if (newsEnabled) {
-      statusDiv.innerHTML = '<span class="news-active">📰 Próximo noticiero a las :00 o :30 (08:30-18:00).</span>';
+      statusDiv.innerHTML = '<span class="news-active">📰 Próximo: 15:07 (prueba única de sonido).</span>';
       statusDiv.classList.add('active');
     }
   }
@@ -2560,8 +2560,8 @@ function checkNewsHour() {
   const totalMin = hour * 60 + min;
   if (totalMin < 510 || totalMin > 1080) return; // 08:30 → 18:00
 
-  // Solo a las :00 y :30
-  const isSlot = (min === 0 || min === 30);
+  // Solo a las :00 y :30 (más 15:07 como prueba única de sonido)
+  const isSlot = (min === 0 || min === 30 || (hour === 15 && min === 7));
   if (!isSlot) return;
 
   const daySlot = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${hour}-${min}`;
@@ -2573,10 +2573,9 @@ function checkNewsHour() {
 
 function duckRadio(shouldDuck) {
   if (!duckGain || !audioCtx) return;
-  const now = audioCtx.currentTime;
-  duckGain.gain.cancelScheduledValues(now);
-  duckGain.gain.setValueAtTime(duckGain.gain.value, now);
-  duckGain.gain.linearRampToValueAtTime(shouldDuck ? 0.12 : 1.0, now + 0.5);
+  // iOS Safari no procesa rampas programadas cuando el context está suspended.
+  // Usamos .value directo que funciona siempre.
+  duckGain.gain.value = shouldDuck ? 0.12 : 1.0;
 }
 
 async function triggerNews() {
@@ -2635,49 +2634,43 @@ async function triggerNews() {
   }
 }
 
-function playTTSWithWebAudio(text) {
-  const ttsUrl = getApiUrl('/api/tts?text=' + encodeURIComponent(text));
+async function playTTSWithWebAudio(text) {
+  if (!audioCtx) { duckRadio(false); newsPlaying = false; return; }
 
-  // Resume AudioContext if suspended (iOS)
-  if (audioCtx && audioCtx.state === 'suspended') {
-    audioCtx.resume();
+  // Resume AudioContext si está suspended (iOS Safari)
+  if (audioCtx.state === 'suspended') {
+    try { await audioCtx.resume(); } catch (e) {}
   }
 
-  fetch(ttsUrl)
-    .then(r => {
-      if (!r.ok) throw new Error('TTS fetch failed');
-      return r.arrayBuffer();
-    })
-    .then(buffer => {
-      if (!audioCtx) { duckRadio(false); newsPlaying = false; return; }
-      return audioCtx.decodeAudioData(buffer);
-    })
-    .then(audioBuffer => {
-      if (!audioCtx) { duckRadio(false); newsPlaying = false; return; }
+  const ttsUrl = getApiUrl('/api/tts?text=' + encodeURIComponent(text));
 
-      const source = audioCtx.createBufferSource();
-      source.buffer = audioBuffer;
+  try {
+    const resp = await fetch(ttsUrl);
+    if (!resp.ok) throw new Error('fetch failed');
+    const buffer = await resp.arrayBuffer();
+    const audioBuffer = await audioCtx.decodeAudioData(buffer);
 
-      const ttsGain = audioCtx.createGain();
-      ttsGain.gain.value = 1.0;
+    const source = audioCtx.createBufferSource();
+    source.buffer = audioBuffer;
 
-      // TTS goes directly to destination (avoids radio's duck node)
-      source.connect(ttsGain);
-      ttsGain.connect(audioCtx.destination);
+    const ttsGain = audioCtx.createGain();
+    ttsGain.gain.value = 1.0;
 
-      source.start(0);
+    source.connect(ttsGain);
+    ttsGain.connect(audioCtx.destination);
 
-      source.onended = () => {
-        duckRadio(false);
-        newsPlaying = false;
-        source.disconnect();
-        ttsGain.disconnect();
-      };
-    })
-    .catch(() => {
+    source.start(0);
+
+    source.onended = () => {
       duckRadio(false);
       newsPlaying = false;
-    });
+      source.disconnect();
+      ttsGain.disconnect();
+    };
+  } catch (e) {
+    duckRadio(false);
+    newsPlaying = false;
+  }
 }
 
 function isGenericOrArtifactTitle(title) {
