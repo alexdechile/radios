@@ -1963,9 +1963,31 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
             self.send_json({"error": str(e)}, 500)
 
 
+def _noticiero_scheduler():
+    """Background thread: runs noticiero.py at :20 and :50 (pre-fetch 10 min before each newscast)."""
+    while True:
+        try:
+            now = datetime.now()
+            if now.minute in (20, 50) and now.second < 10:
+                subprocess.run(
+                    [sys.executable, NOTICIERO_SCRIPT],
+                    capture_output=True,
+                    timeout=35,
+                )
+                time.sleep(5)  # avoid re-trigger within same minute
+        except Exception:
+            pass
+        time.sleep(15)
+
+
 if __name__ == "__main__":
     socketserver.ThreadingTCPServer.allow_reuse_address = True
     handler = RadiosHandler
+
+    # Start noticiero scheduler in background
+    t = threading.Thread(target=_noticiero_scheduler, daemon=True)
+    t.start()
+
     with socketserver.ThreadingTCPServer(("", PORT), handler) as httpd:
         print(
             f"Serving Radios with Deep Search at http://localhost:{PORT}",

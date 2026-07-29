@@ -2531,7 +2531,7 @@ function initNewsFeature() {
       btnToggle.classList.toggle('active', newsEnabled);
       if (statusDiv) {
         statusDiv.innerHTML = newsEnabled
-          ? '<span class="news-active">📰 Próximo noticiero cada 5 min.</span>'
+          ? '<span class="news-active">📰 Próximo noticiero a las :00 o :30 (08:30-18:00).</span>'
           : '<span>Noticias desactivadas.</span>';
         statusDiv.classList.toggle('active', newsEnabled);
       }
@@ -2540,7 +2540,7 @@ function initNewsFeature() {
 
   if (statusDiv) {
     if (newsEnabled) {
-      statusDiv.innerHTML = '<span class="news-active">📰 Próximo noticiero cada 5 min.</span>';
+      statusDiv.innerHTML = '<span class="news-active">📰 Próximo noticiero a las :00 o :30 (08:30-18:00).</span>';
       statusDiv.classList.add('active');
     }
   }
@@ -2553,10 +2553,21 @@ function checkNewsHour() {
   if (!player || !player.playing) return;
 
   const now = new Date();
-  const slot = Math.floor(now.getMinutes() / 5);
+  const hour = now.getHours();
+  const min = now.getMinutes();
+  const sec = now.getSeconds();
 
-  if (lastNewsHour !== slot) {
-    lastNewsHour = slot;
+  // Solo entre 08:30 y 18:00 hora chilena
+  const totalMin = hour * 60 + min;
+  if (totalMin < 510 || totalMin > 1080) return; // 08:30 → 18:00
+
+  // Solo a las :00 y :30, en el segundo exacto
+  const isSlot = (min === 0 || min === 30) && sec === 0;
+  if (!isSlot) return;
+
+  const daySlot = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${hour}-${min}`;
+  if (lastNewsHour !== daySlot) {
+    lastNewsHour = daySlot;
     triggerNews();
   }
 }
