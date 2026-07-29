@@ -2555,14 +2555,13 @@ function checkNewsHour() {
   const now = new Date();
   const hour = now.getHours();
   const min = now.getMinutes();
-  const sec = now.getSeconds();
 
   // Solo entre 08:30 y 18:00 hora chilena
   const totalMin = hour * 60 + min;
   if (totalMin < 510 || totalMin > 1080) return; // 08:30 → 18:00
 
-  // Solo a las :00 y :30, en el segundo exacto
-  const isSlot = (min === 0 || min === 30) && sec === 0;
+  // Solo a las :00 y :30
+  const isSlot = (min === 0 || min === 30);
   if (!isSlot) return;
 
   const daySlot = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${hour}-${min}`;
