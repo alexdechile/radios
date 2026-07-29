@@ -2526,11 +2526,9 @@ function checkNewsHour() {
   if (!player || !player.playing) return;
 
   const now = new Date();
-  const slot = Math.floor(now.getMinutes() / 30);
-  const sec = now.getSeconds();
+  const slot = Math.floor(now.getMinutes() / 5);
 
-  // Trigger at second 0 of each half-hour for consistency
-  if (lastNewsHour !== slot && sec === 0) {
+  if (lastNewsHour !== slot) {
     lastNewsHour = slot;
     triggerNews();
   }

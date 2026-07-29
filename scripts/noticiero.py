@@ -93,7 +93,9 @@ def parse_rss(xml_data):
 
 def build_script(headlines):
     parts = ["Noticiero Comerza."]
-    parts.extend(headlines)
+    for h in headlines:
+        h = h.strip().rstrip(".!?,")
+        parts.append(f"{h}.")
     parts.append("Estas fueron las noticias. Gracias por sintonizarnos.")
     return " ".join(parts)
 
