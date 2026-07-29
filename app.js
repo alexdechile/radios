@@ -2504,7 +2504,7 @@ function initNewsFeature() {
       btnToggle.classList.toggle('active', newsEnabled);
       if (statusDiv) {
         statusDiv.innerHTML = newsEnabled
-          ? '<span class="news-active">📰 Próximas noticias a la hora en punto.</span>'
+          ? '<span class="news-active">📰 Próximas noticias cada 5 min.</span>'
           : '<span>Noticias desactivadas.</span>';
         statusDiv.classList.toggle('active', newsEnabled);
       }
@@ -2513,7 +2513,7 @@ function initNewsFeature() {
 
   if (statusDiv) {
     if (newsEnabled) {
-      statusDiv.innerHTML = '<span class="news-active">📰 Próximas noticias a la hora en punto.</span>';
+      statusDiv.innerHTML = '<span class="news-active">📰 Próximas noticias cada 5 min.</span>';
       statusDiv.classList.add('active');
     }
   }
@@ -2526,11 +2526,10 @@ function checkNewsHour() {
   if (!player || !player.playing) return;
 
   const now = new Date();
-  const hour = now.getHours();
-  const min = now.getMinutes();
+  const slot = Math.floor(now.getMinutes() / 5);
 
-  if (min === 0 && lastNewsHour !== hour) {
-    lastNewsHour = hour;
+  if (lastNewsHour !== slot) {
+    lastNewsHour = slot;
     triggerNews();
   }
 }

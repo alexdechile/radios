@@ -1,6 +1,14 @@
 # Radios App - DonAlex Homelab
 
 ## Último Realizado
+- [x] **Noticias por Voz cada Hora** (2026-07-28):
+  - Nuevo endpoint backend `GET /api/news` que entrega texto placeholder de noticias (reemplazable después por script real).
+  - Nuevo endpoint backend `GET /api/tts` que genera audio MP3 con `edge-tts` (voz `es-CL-CatalinaNeural`) y lo cachea por hash.
+  - Audio ducking: `GainNode` insertado en la cadena Web Audio API para bajar el volumen de la radio (a 0.12) mientras suenan las noticias, con transición suave de 500ms.
+  - Segunda etiqueta `<audio id="ttsPlayer">` oculta para reproducir el TTS sin interferir con la cadena Web Audio de la radio.
+  - Scheduler que cada hora en punto (minutos=0) detecta si hay una radio sonando y dispara las noticias.
+  - Toggle "Noticias por Voz" en el modal de temporizadores con persistencia en localStorage.
+  - TTS cacheado por 1 hora (Cache-Control) + limpieza automática a los 5 minutos.
 - [x] **Optimización de PWA y Buffer de Audio** (2026-07-26):
   - Generación de iconos PNG (192x192 y 512x512) para el `manifest.json` mejorando la compatibilidad PWA (especialmente en iOS/Safari).
   - Configuración de `sizes: "any"` para el icono SVG en el manifest.
