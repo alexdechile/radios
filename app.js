@@ -2489,6 +2489,33 @@ function triggerAlarm() {
 }
 
 /* ── Noticias por Voz ── */
+const POSITIVE_PHRASES = [
+  "Recuerda que cada día es una nueva oportunidad para ser feliz.",
+  "La música es el alma de la vida. Sigue disfrutando.",
+  "Que tengas un excelente día, lleno de buenas vibras.",
+  "Sonríe, que la vida es bella y siempre hay razones para celebrar.",
+  "Agradece cada momento, porque la felicidad está en las pequeñas cosas.",
+  "Nunca es tarde para tener un buen día. El momento es ahora.",
+  "La vida es como la música: a veces suave, a veces intensa, siempre hermosa.",
+  "Respira profundo, suelta lo que no suma y disfruta el presente.",
+  "Hoy es un buen día para ser feliz. Tú decides.",
+  "La alegría está más cerca de lo que crees. Solo basta una buena canción.",
+  "Cree en ti, porque todo lo que sueñas puede hacerse realidad.",
+  "Cada canción tiene una historia, y hoy la tuya apenas comienza.",
+  "Lo mejor de la vida aún está por venir. Disfruta el viaje.",
+  "Que la música y las buenas noticias te acompañen siempre.",
+  "No olvides que eres más fuerte de lo que crees. Sigue adelante.",
+  "Hoy es un gran día para regalar una sonrisa. Empieza por ti.",
+  "La vida no espera, pero siempre te da una nueva oportunidad.",
+  "La felicidad no es un destino, es la forma en que viajas.",
+  "Que tu corazón encuentre paz en cada nota musical.",
+  "El mejor momento para ser feliz es ahora. Aprovéchalo.",
+];
+
+function getRandomPositivePhrase() {
+  return POSITIVE_PHRASES[Math.floor(Math.random() * POSITIVE_PHRASES.length)];
+}
+
 function initNewsFeature() {
   const btnToggle = document.getElementById('btnToggleNews');
   const statusDiv = document.getElementById('newsStatus');
@@ -2504,7 +2531,7 @@ function initNewsFeature() {
       btnToggle.classList.toggle('active', newsEnabled);
       if (statusDiv) {
         statusDiv.innerHTML = newsEnabled
-          ? '<span class="news-active">📰 Próximo noticiero a las :00 o :30.</span>'
+          ? '<span class="news-active">📰 Próximo noticiero cada 5 min.</span>'
           : '<span>Noticias desactivadas.</span>';
         statusDiv.classList.toggle('active', newsEnabled);
       }
@@ -2513,7 +2540,7 @@ function initNewsFeature() {
 
   if (statusDiv) {
     if (newsEnabled) {
-      statusDiv.innerHTML = '<span class="news-active">📰 Próximo noticiero a las :00 o :30.</span>';
+      statusDiv.innerHTML = '<span class="news-active">📰 Próximo noticiero cada 5 min.</span>';
       statusDiv.classList.add('active');
     }
   }
@@ -2560,22 +2587,31 @@ async function triggerNews() {
     if (titleEl && stationEl) {
       const song = titleEl.textContent.trim();
       const station = stationEl.textContent.trim();
-      if (song && song !== 'Selecciona una emisora para comenzar' && !isGenericOrArtifactTitle(song)) {
-        // Try to parse as "Artist - Title"
+      const validStation = station && station !== 'Radios App';
+      const validSong = song && song !== 'Selecciona una emisora para comenzar' && !isGenericOrArtifactTitle(song);
+
+      if (validSong && validStation) {
         const parts = song.split(' - ');
         if (parts.length >= 2) {
           signoff = ` Sigamos escuchando a ${parts[0]} con ${parts.slice(1).join(' - ')}, en ${station}.`;
         } else {
           signoff = ` Sigamos escuchando "${song}", en ${station}.`;
         }
-      } else if (station && station !== 'Radios App') {
+      } else if (validStation) {
         signoff = ` Sigamos escuchando ${station}.`;
+      } else if (currentPlayingStation?.name) {
+        signoff = ` Sigamos escuchando ${currentPlayingStation.name}.`;
       }
+    } else if (currentPlayingStation?.name) {
+      signoff = ` Sigamos escuchando ${currentPlayingStation.name}.`;
     }
 
     if (signoff) {
       text += signoff;
     }
+
+    // Add random positive phrase
+    text += ' ' + getRandomPositivePhrase();
 
     newsPlaying = true;
 
