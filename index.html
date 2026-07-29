@@ -372,8 +372,8 @@
         <audio id="audioPlayer" playsinline></audio>
       </div>
 
-      <!-- TTS oculto para noticias por voz -->
-      <audio id="ttsPlayer" preload="auto" style="display:none"></audio>
+      <!-- TTS para noticias por voz (sr-only para Safari iOS) -->
+      <audio id="ttsPlayer" preload="auto" class="sr-only"></audio>
 
       <!-- Modal de Temporizador / Despertador -->
       <div id="timerModal" class="timer-modal">

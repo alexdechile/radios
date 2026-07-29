@@ -2628,36 +2628,57 @@ async function triggerNews() {
 
     duckRadio(true);
 
-    const ttsAudio = document.getElementById('ttsPlayer');
-    if (!ttsAudio) {
-      newsPlaying = false;
-      return;
-    }
-
-    ttsAudio.src = getApiUrl('/api/tts?text=' + encodeURIComponent(text));
-    ttsAudio.load();
-
-    ttsAudio.oncanplay = () => {
-      ttsAudio.play().catch(() => {
-        duckRadio(false);
-        newsPlaying = false;
-      });
-    };
-
-    ttsAudio.onerror = () => {
-      duckRadio(false);
-      newsPlaying = false;
-    };
-
-    ttsAudio.onended = () => {
-      duckRadio(false);
-      newsPlaying = false;
-      ttsAudio.src = '';
-    };
+    // Use Web Audio API to play TTS (more reliable on iOS Safari)
+    playTTSWithWebAudio(text);
   } catch (e) {
     duckRadio(false);
     newsPlaying = false;
   }
+}
+
+function playTTSWithWebAudio(text) {
+  const ttsUrl = getApiUrl('/api/tts?text=' + encodeURIComponent(text));
+
+  // Resume AudioContext if suspended (iOS)
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+
+  fetch(ttsUrl)
+    .then(r => {
+      if (!r.ok) throw new Error('TTS fetch failed');
+      return r.arrayBuffer();
+    })
+    .then(buffer => {
+      if (!audioCtx) { duckRadio(false); newsPlaying = false; return; }
+      return audioCtx.decodeAudioData(buffer);
+    })
+    .then(audioBuffer => {
+      if (!audioCtx) { duckRadio(false); newsPlaying = false; return; }
+
+      const source = audioCtx.createBufferSource();
+      source.buffer = audioBuffer;
+
+      const ttsGain = audioCtx.createGain();
+      ttsGain.gain.value = 1.0;
+
+      // TTS goes directly to destination (avoids radio's duck node)
+      source.connect(ttsGain);
+      ttsGain.connect(audioCtx.destination);
+
+      source.start(0);
+
+      source.onended = () => {
+        duckRadio(false);
+        newsPlaying = false;
+        source.disconnect();
+        ttsGain.disconnect();
+      };
+    })
+    .catch(() => {
+      duckRadio(false);
+      newsPlaying = false;
+    });
 }
 
 function isGenericOrArtifactTitle(title) {
