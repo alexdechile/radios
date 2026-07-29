@@ -2531,7 +2531,7 @@ function initNewsFeature() {
       btnToggle.classList.toggle('active', newsEnabled);
       if (statusDiv) {
         statusDiv.innerHTML = newsEnabled
-          ? '<span class="news-active">📰 Próximo: 15:07 (prueba única de sonido).</span>'
+          ? '<span class="news-active">📰 Próximo noticiero a las :00 o :30 (08:30-18:00).</span>'
           : '<span>Noticias desactivadas.</span>';
         statusDiv.classList.toggle('active', newsEnabled);
       }
@@ -2540,7 +2540,7 @@ function initNewsFeature() {
 
   if (statusDiv) {
     if (newsEnabled) {
-      statusDiv.innerHTML = '<span class="news-active">📰 Próximo: 15:07 (prueba única de sonido).</span>';
+      statusDiv.innerHTML = '<span class="news-active">📰 Próximo noticiero a las :00 o :30 (08:30-18:00).</span>';
       statusDiv.classList.add('active');
     }
   }
@@ -2560,8 +2560,8 @@ function checkNewsHour() {
   const totalMin = hour * 60 + min;
   if (totalMin < 510 || totalMin > 1080) return; // 08:30 → 18:00
 
-  // Solo a las :00 y :30 (más 15:07 como prueba única de sonido)
-  const isSlot = (min === 0 || min === 30 || (hour === 15 && min === 7));
+  // Solo a las :00 y :30
+  const isSlot = (min === 0 || min === 30);
   if (!isSlot) return;
 
   const daySlot = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${hour}-${min}`;
