@@ -3017,6 +3017,8 @@ async function sendSongVote(vote, data) {
 function hideSongPopup() {
   const overlay = document.getElementById('songPopupOverlay');
   if (overlay) overlay.classList.add('hidden');
+  const popup = document.getElementById('songPopup');
+  if (popup) popup.classList.remove('lyrics-fullscreen');
   clearTimeout(songPopupTimer);
   clearTimeout(songPopupDismissTimer);
 }
@@ -3053,6 +3055,8 @@ function setupLyricsSection(data) {
   wrap.classList.remove('hidden');
   body.classList.add('hidden');
   toggle.classList.remove('expanded');
+  const popup = document.getElementById('songPopup');
+  if (popup) popup.classList.remove('lyrics-fullscreen');
   textEl.textContent = '';
   statusEl.textContent = '';
   statusEl.classList.add('hidden');
@@ -3068,11 +3072,13 @@ function setupLyricsSection(data) {
       // collapse
       body.classList.add('hidden');
       toggle.classList.remove('expanded');
+      if (popup) popup.classList.remove('lyrics-fullscreen');
       return;
     }
     // expand
     body.classList.remove('hidden');
     toggle.classList.add('expanded');
+    if (popup) popup.classList.add('lyrics-fullscreen');
     // Keep popup open while reading lyrics
     clearTimeout(songPopupTimer);
 

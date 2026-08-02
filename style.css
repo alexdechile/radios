@@ -2922,6 +2922,53 @@ html, body {
   background: transparent;
 }
 
+/* Fullscreen Lyrics Mode */
+.song-popup.lyrics-fullscreen .song-popup-media-row,
+.song-popup.lyrics-fullscreen .song-popup-desc,
+.song-popup.lyrics-fullscreen .song-popup-details,
+.song-popup.lyrics-fullscreen .song-popup-extras,
+.song-popup.lyrics-fullscreen .song-popup-wiki-link,
+.song-popup.lyrics-fullscreen .song-popup-actions {
+  display: none !important;
+}
+
+.song-popup.lyrics-fullscreen {
+  height: 80vh;
+  max-width: 510px;
+}
+
+.song-popup.lyrics-fullscreen .song-popup-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.song-popup.lyrics-fullscreen .song-popup-lyrics {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-top: 0;
+  border-top: none;
+  padding-top: 0;
+}
+
+.song-popup.lyrics-fullscreen .song-popup-lyrics-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.song-popup.lyrics-fullscreen .song-popup-lyrics-text {
+  max-height: none;
+  flex: 1;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: 1.25rem;
+  line-height: 1.8;
+  padding: 16px;
+  text-align: center;
+  color: #fff;
+}
+
 /* ── DJ Add Button (popup header) ── */
 .song-popup-add-btn {
   margin-left: auto;
