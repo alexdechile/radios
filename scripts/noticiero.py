@@ -148,9 +148,9 @@ def generate():
         for it in today:
             it["score"] = score_title(it["title"])
         today.sort(key=lambda x: (-x["score"], x["pubdate"]))
-        all_items.extend(today[:5])
+        all_items.extend(today)
         print(
-            f"[noticiero] Cooperativa: {len(today)} hoy, tomados {min(5, len(today))}",
+            f"[noticiero] Cooperativa: {len(today)} hoy",
             file=__import__("sys").stderr,
         )
     except Exception as e:
@@ -163,7 +163,7 @@ def generate():
         for it in items:
             it["score"] = score_title(it["title"])
         items.sort(key=lambda x: -x["score"])
-        all_items.extend(items[:4])
+        all_items.extend(items)
         print(
             f"[noticiero] Ex-Ante: {len(items)} encontrados",
             file=__import__("sys").stderr,
@@ -181,9 +181,37 @@ def generate():
         seen.add(key)
         final.append(it)
 
+    # Load history to avoid repeating old news
+    history = []
+    history_path = os.path.join(BASE_DIR, "noticiero_history.json")
+    if os.path.exists(history_path):
+        try:
+            with open(history_path, "r", encoding="utf-8") as f:
+                history = json.load(f)
+        except Exception:
+            pass
+            
+    history_keys = {h.lower()[:60] for h in history}
+    
+    # Filter out items that have already been played recently
+    final_filtered = [it for it in final if it["title"].lower()[:60] not in history_keys]
+    
+    # If filtering removes everything (e.g. no new news at all), fallback to original final
+    if not final_filtered:
+        final_filtered = final
+
     # Prioritize by score, limit to 5
-    final.sort(key=lambda x: -x.get("score", 0))
-    final = final[:5]
+    final_filtered.sort(key=lambda x: -x.get("score", 0))
+    final = final_filtered[:5]
+    
+    # Save to history
+    new_history = history + [it["title"] for it in final]
+    new_history = new_history[-100:] # Keep last 100 items
+    try:
+        with open(history_path, "w", encoding="utf-8") as f:
+            json.dump(new_history, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[noticiero] Error saving history: {e}", file=__import__("sys").stderr)
 
     if not final:
         print("[noticiero] No headlines from any source", file=__import__("sys").stderr)

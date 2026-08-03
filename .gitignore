@@ -15,3 +15,7 @@ playlists/
 # Sistema
 .directory
 .DS_Store
+
+# Noticiero output y caché
+noticiero.json
+noticiero_history.json
