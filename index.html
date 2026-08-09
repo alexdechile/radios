@@ -509,8 +509,10 @@
         + '&name=' + encodeURIComponent(name || 'Radio')
         + '&favicon=' + encodeURIComponent(favicon || '');
       bar.setAttribute('hx-get', apiUrl);
+      // Reprocesar el nodo para que el poll cada 15s use la NUEVA URL
+      // (htmx captura hx-get al procesar; htmx:load solo dispara el evento)
+      htmx.process(bar);
       // Lanzar primera petición inmediatamente (no esperar 15s)
-      htmx.trigger(bar, 'htmx:load');
       htmx.ajax('GET', apiUrl, { target: bar, swap: 'innerHTML' });
     };
 
@@ -519,6 +521,8 @@
       if (!bar) return;
       bar.removeAttribute('hx-get');
       bar.innerHTML = '<div class="htmx-np-inner htmx-np-idle"><span class="htmx-np-pulse">&#9835;</span><div class="htmx-np-texts"><span class="htmx-np-station">Radios App</span><span class="htmx-np-title">Selecciona una emisora para comenzar</span><span class="htmx-np-subtitle"><i class="fas fa-sparkles"></i> Transmisión en vivo y metadatos</span></div></div>';
+      // Re-procesar: sin hx-get el poll cada 15s deja de pedir la canción anterior
+      htmx.process(bar);
     };
   </script>
 
