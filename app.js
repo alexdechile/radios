@@ -85,8 +85,8 @@ let alarmStation = localStorage.getItem('radios_alarm_station') || 'current';
 let lastAlarmTriggeredDate = '';
 let alarmCheckerInterval = null;
 
-// News-by-voice state
-let newsEnabled = localStorage.getItem('radios_news_enabled') === 'true';
+// News-by-voice state — EN STANDBY
+let newsEnabled = localStorage.getItem('radios_news_enabled') === 'true' && false;
 let lastNewsHour = -1;
 let duckGain = null;
 let newsPlaying = false;
@@ -309,8 +309,8 @@ async function init() {
   // Init Timer & Alarm
   initTimerAndAlarm();
 
-  // Init News-by-Voice
-  initNewsFeature();
+  // Init News-by-Voice — EN STANDBY (comentado, sin eliminar)
+  // initNewsFeature();
 
   // Init EQ Panel UI
   initEqPanel();
@@ -2254,7 +2254,7 @@ function initTimerAndAlarm() {
   alarmCheckerInterval = setInterval(() => {
     checkAlarm();
     updateSleepCountdown();
-    checkNewsHour();
+    // checkNewsHour(); — EN STANDBY
   }, 1000);
 
   // Update initial UI state

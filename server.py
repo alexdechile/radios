@@ -1984,9 +1984,9 @@ if __name__ == "__main__":
     socketserver.ThreadingTCPServer.allow_reuse_address = True
     handler = RadiosHandler
 
-    # Start noticiero scheduler in background
-    t = threading.Thread(target=_noticiero_scheduler, daemon=True)
-    t.start()
+    # Start noticiero scheduler in background — EN STANDBY (comentado, sin eliminar)
+    # t = threading.Thread(target=_noticiero_scheduler, daemon=True)
+    # t.start()
 
     with socketserver.ThreadingTCPServer(("", PORT), handler) as httpd:
         print(
