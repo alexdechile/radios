@@ -16,9 +16,9 @@ import threading
 from datetime import datetime, timedelta
 from scrapling.fetchers import Fetcher
 
-PORT = 8000
+PORT = int(os.environ.get("PORT", 8000))
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "radios_curated.db")
-TTS_VENV_PYTHON = "/home/alexdechile/.openclaw/tmp/tts-venv/bin/python"
+TTS_VENV_PYTHON = os.environ.get("TTS_VENV_PYTHON", sys.executable)
 TTS_VOICE = "es-CL-CatalinaNeural"
 TTS_CACHE_DIR = "/tmp/radios_tts_cache"
 NOTICIERO_PATH = os.path.join(
@@ -1984,13 +1984,18 @@ if __name__ == "__main__":
     socketserver.ThreadingTCPServer.allow_reuse_address = True
     handler = RadiosHandler
 
+    # Allow port override via command line args
+    port = PORT
+    if len(sys.argv) > 2 and sys.argv[1] == "--port":
+        port = int(sys.argv[2])
+
     # Start noticiero scheduler in background — EN STANDBY (comentado, sin eliminar)
     # t = threading.Thread(target=_noticiero_scheduler, daemon=True)
     # t.start()
 
-    with socketserver.ThreadingTCPServer(("", PORT), handler) as httpd:
+    with socketserver.ThreadingTCPServer(("", port), handler) as httpd:
         print(
-            f"Serving Radios with Deep Search at http://localhost:{PORT}",
+            f"Serving Radios with Deep Search at http://localhost:{port}",
             file=sys.stderr,
         )
         try:
