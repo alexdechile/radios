@@ -1,6 +1,7 @@
 # Radios App - DonAlex Homelab
 
 ## Último Realizado
+- **30 de Agosto 2026:** Configurado **Tailscale Funnel** público en el puerto `10000` redirigido a `8000` de forma segura. Permite compartir la aplicación con terceros de forma pública sin exponer otros servicios de Nginx (manteniendo el puerto 443 en "tailnet only") y sin usar dominios comerciales. Se preparó también el backend con `Dockerfile` y `requirements.txt` y se actualizó `server.py` para soportar puertos y variables de entorno dinámicas.
 - **18 de Agosto 2026:** Implementado "Modo Directo iOS" para bypassear la cadena de efectos (AudioContext) en iPhone/iPad y evitar que el audio se corte en segundo plano.
 - [x] **Filtro de Noticias Repetidas** (2026-08-02):
   - Actualizado `scripts/noticiero.py` para usar `noticiero_history.json`. Se filtran las noticias generadas recientemente (hasta 100 previas) para evitar que se repitan continuamente los mismos titulares con puntajes altos (especialmente de fuentes sin fecha como Ex-Ante). Se añadieron las cachés de json a `.gitignore`.
