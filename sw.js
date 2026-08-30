@@ -1,9 +1,9 @@
-const CACHE_NAME = 'radios-sketch-v1.6.0';
+const CACHE_NAME = 'radios-sketch-v1.6.1';
 const ASSETS = [
   '/radios/',
-  '/radios/index.html?v=1.6.0',
-  '/radios/style.css?v=1.6.0',
-  '/radios/app.js?v=1.6.0',
+  '/radios/index.html?v=1.6.1',
+  '/radios/style.css?v=1.6.1',
+  '/radios/app.js?v=1.6.1',
   '/radios/radios_db.json'
 ];
 

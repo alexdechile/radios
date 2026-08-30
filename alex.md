@@ -1,6 +1,7 @@
 # Radios App - DonAlex Homelab
 
 ## Último Realizado
+- **18 de Agosto 2026:** Implementado "Modo Directo iOS" para bypassear la cadena de efectos (AudioContext) en iPhone/iPad y evitar que el audio se corte en segundo plano.
 - [x] **Filtro de Noticias Repetidas** (2026-08-02):
   - Actualizado `scripts/noticiero.py` para usar `noticiero_history.json`. Se filtran las noticias generadas recientemente (hasta 100 previas) para evitar que se repitan continuamente los mismos titulares con puntajes altos (especialmente de fuentes sin fecha como Ex-Ante). Se añadieron las cachés de json a `.gitignore`.
 - [x] **Noticiero Comerza — Noticias Reales cada 30 min** (2026-07-28):

@@ -6,7 +6,7 @@
 const API_SERVERS = ['de1', 'de2', 'nl1', 'at1'];
 const UA = 'RadiosSketchApp/1.0';
 const STORE_KEY = 'radios_playlist';
-const APP_VERSION = '1.5.1';
+const APP_VERSION = '1.5.2';
 
 // Resolve API path relative to base path (handles /radios subpath on production)
 function getApiUrl(path) {
@@ -343,7 +343,25 @@ function initEqualizer() {
     return;
   }
 
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  if (isIOS) {
+    console.log('[iOS] Bypassing AudioContext for HTML5 Audio to allow background play.');
+    window.isIOSDirectAudio = true;
+    const eqBtn = document.getElementById('btnEqToggle');
+    if (eqBtn) {
+       eqBtn.style.opacity = '0.5';
+       eqBtn.title = 'Efectos desactivados en iOS para reproducción en segundo plano';
+       eqBtn.onclick = (e) => {
+         e.preventDefault();
+         e.stopPropagation();
+         alert('Los efectos de audio están desactivados en iPhone/iPad para evitar cortes cuando se bloquea la pantalla.');
+       };
+    }
+    return; // Do not connect media element source
+  }
 
   // Build EQ filter chain
   eqFilters = EQ_BANDS.map((band, i) => {
@@ -2572,6 +2590,11 @@ function checkNewsHour() {
 }
 
 function duckRadio(shouldDuck) {
+  if (window.isIOSDirectAudio) {
+    const audio = document.getElementById('audioPlayer');
+    if (audio) audio.volume = shouldDuck ? 0.12 : 1.0;
+    return;
+  }
   if (!duckGain || !audioCtx) return;
   // iOS Safari no procesa rampas programadas cuando el context está suspended.
   // Usamos .value directo que funciona siempre.
