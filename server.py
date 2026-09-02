@@ -114,6 +114,7 @@ init_db()
 
 class RadiosHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
+        self._strip_radios_prefix()
         try:
             if self.path.startswith("/api/version"):
                 self.handle_version()
@@ -144,7 +145,16 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
         except Exception as e:
             self.send_json({"error": str(e)}, 500)
 
+    def _strip_radios_prefix(self):
+        """Normalize path: strip /radios prefix so the server works both via
+        Nginx (which already strips it) and when accessed directly on port."""
+        if self.path.startswith("/radios/"):
+            self.path = self.path[len("/radios"):]
+        elif self.path == "/radios":
+            self.path = "/"
+
     def do_POST(self):
+        self._strip_radios_prefix()
         if self.path.startswith("/api/curated"):
             self.handle_add_curated()
         elif self.path.startswith("/api/playlist"):
@@ -153,10 +163,12 @@ class RadiosHandler(http.server.BaseHTTPRequestHandler):
             self.handle_feedback()
 
     def do_DELETE(self):
+        self._strip_radios_prefix()
         if self.path.startswith("/api/curated"):
             self.handle_delete_curated()
 
     def do_OPTIONS(self):
+        self._strip_radios_prefix()
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header(
