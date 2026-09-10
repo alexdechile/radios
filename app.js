@@ -6,7 +6,7 @@
 const API_SERVERS = ['de1', 'de2', 'nl1', 'at1'];
 const UA = 'RadiosSketchApp/1.0';
 const STORE_KEY = 'radios_playlist';
-const APP_VERSION = '1.5.2';
+const APP_VERSION = '1.6.4';
 
 // Resolve API path relative to base path (handles /radios subpath on production)
 function getApiUrl(path) {
@@ -125,10 +125,17 @@ async function init() {
     });
   }
 
-  playlist = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+  try {
+    playlist = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    if (!Array.isArray(playlist)) playlist = [];
+  } catch (e) {
+    console.warn('Playlist local corrupta, se reinicia.');
+    playlist = [];
+    localStorage.removeItem(STORE_KEY);
+  }
 
   // Sync curated radios from server SQLite
-  syncCuratedFromServer();
+  await syncCuratedFromServer();
 
   // Inyectar patrocinadas (asegurando que no se repitan)
   SPONSORED_STATIONS.forEach(sponsored => {
@@ -238,6 +245,9 @@ async function init() {
     playNext();
   });
 
+  // Micro Volume Slider Controller
+  initMicroVolumeSlider();
+
   // Favorite toggle from player
   document.getElementById('btnFavPlayer')?.addEventListener('click', () => {
     const cur = currentPlayingStation;
@@ -275,6 +285,100 @@ async function init() {
   player.on('ended', () => {
     playNext();
   });
+
+  /* ── Micro Volume Slider Logic ── */
+  function initMicroVolumeSlider() {
+    const wrap = document.getElementById('volumeMicroWrap');
+    const slider = document.getElementById('volumeSlider');
+    const fill = document.getElementById('volumeMicroFill');
+    const badge = document.getElementById('volumeMicroBadge');
+    const icon = document.getElementById('volumeIcon');
+    const btnMute = document.getElementById('btnVolumeMute');
+    if (!slider || !fill || !wrap) return;
+
+    let collapseTimer = null;
+    let prevVolume = 1;
+
+    function getSavedVolume() {
+      const saved = localStorage.getItem('radios_volume');
+      const parsed = saved !== null ? parseFloat(saved) : 1;
+      return Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), 1) : 1;
+    }
+
+    function updateVolumeUI(val, isMuted = false) {
+      const pct = Math.round(val * 100);
+      slider.value = pct;
+      fill.style.width = `${pct}%`;
+      if (badge) badge.textContent = isMuted ? 'Mute' : `${pct}%`;
+
+      if (icon) {
+        icon.className = 'fas';
+        if (isMuted || val === 0) {
+          icon.classList.add('fa-volume-xmark');
+        } else if (val < 0.4) {
+          icon.classList.add('fa-volume-low');
+        } else {
+          icon.classList.add('fa-volume-high');
+        }
+      }
+    }
+
+    // Set initial volume
+    const initVol = getSavedVolume();
+    if (player) {
+      player.volume = initVol;
+    }
+    updateVolumeUI(initVol);
+
+    function triggerInteraction() {
+      wrap.classList.add('interacting');
+      if (collapseTimer) clearTimeout(collapseTimer);
+      collapseTimer = setTimeout(() => {
+        wrap.classList.remove('interacting');
+      }, 1400);
+    }
+
+    slider.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value) / 100;
+      if (player) {
+        player.volume = val;
+        if (player.muted && val > 0) player.muted = false;
+      }
+      localStorage.setItem('radios_volume', val);
+      updateVolumeUI(val);
+      triggerInteraction();
+    });
+
+    slider.addEventListener('touchstart', triggerInteraction, { passive: true });
+    slider.addEventListener('touchmove', triggerInteraction, { passive: true });
+    slider.addEventListener('touchend', triggerInteraction, { passive: true });
+    slider.addEventListener('mouseenter', triggerInteraction);
+
+    btnMute?.addEventListener('click', () => {
+      if (!player) return;
+      if (player.muted || player.volume === 0) {
+        player.muted = false;
+        player.volume = prevVolume > 0 ? prevVolume : 0.8;
+        updateVolumeUI(player.volume, false);
+      } else {
+        prevVolume = player.volume;
+        player.muted = true;
+        updateVolumeUI(0, true);
+      }
+      triggerInteraction();
+    });
+
+    // Sync if Plyr changes volume internally
+    if (player) {
+      player.on('volumechange', () => {
+        if (player.muted) {
+          updateVolumeUI(0, true);
+        } else {
+          updateVolumeUI(player.volume, false);
+        }
+      });
+    }
+  }
 
   // Event delegation
   document.getElementById('results').addEventListener('click', onResultsClick);
@@ -478,7 +582,8 @@ function createEffectsChain(inputNode) {
   const swGainCrossR = audioCtx.createGain();
   const swMerger = audioCtx.createChannelMerger(2);
 
-  const savedWidth = parseFloat(localStorage.getItem('fx_stereo_width') || '100');
+  const rawWidth = parseFloat(localStorage.getItem('fx_stereo_width') || '100');
+  const savedWidth = Number.isFinite(rawWidth) ? rawWidth : 100;
   const widthNorm = savedWidth / 100;
   const alpha = (1 + widthNorm) / 2;
   const beta  = (1 - widthNorm) / 2;
@@ -503,7 +608,7 @@ function createEffectsChain(inputNode) {
   // Surround: Haas effect (delay on left channel)
   const surrSplitter = audioCtx.createChannelSplitter(2);
   const surrDelay = audioCtx.createDelay(0.1);
-  surrDelay.delayTime.value = 0.001; // min delay when off
+  surrDelay.delayTime.value = 0; // bypass real cuando está apagado
   const surrMerger = audioCtx.createChannelMerger(2);
 
   surrSplitter.connect(surrDelay, 0, 0);
@@ -529,7 +634,7 @@ function createEffectsChain(inputNode) {
 
   // Restore surround state
   const savedSurround = localStorage.getItem('fx_surround') === 'true';
-  surrDelay.delayTime.value = savedSurround ? 0.025 : 0.001;
+  surrDelay.delayTime.value = savedSurround ? 0.025 : 0;
 
   return bassBoostFilter;
 }
@@ -548,7 +653,7 @@ function updateStereoWidth(percent) {
 
 function updateSurround(enabled) {
   if (!surroundNode) return;
-  surroundNode.delay.delayTime.value = enabled ? 0.025 : 0.001;
+  surroundNode.delay.delayTime.value = enabled ? 0.025 : 0;
   localStorage.setItem('fx_surround', enabled);
 }
 
@@ -590,7 +695,13 @@ function initEffectsPanel() {
   // Stereo Width slider
   const swSlider = document.getElementById('stereoWidthSlider');
   const swVal    = document.getElementById('stereoWidthVal');
+  const rawWidth = parseFloat(localStorage.getItem('fx_stereo_width') || '100');
+  const savedWidth = Number.isFinite(rawWidth) ? rawWidth : 100;
   if (swSlider) {
+    if (!Number.isNaN(savedWidth)) {
+      swSlider.value = String(savedWidth);
+      if (swVal) swVal.textContent = `${savedWidth}%`;
+    }
     swSlider.addEventListener('input', () => {
       const val = parseInt(swSlider.value);
       swVal.textContent = val + '%';
@@ -601,7 +712,10 @@ function initEffectsPanel() {
   // Surround toggle
   const surrToggle = document.getElementById('surroundToggle');
   const surrStatus = document.getElementById('surroundStatus');
+  const savedSurround = localStorage.getItem('fx_surround') === 'true';
   if (surrToggle) {
+    surrToggle.checked = savedSurround;
+    if (surrStatus) surrStatus.textContent = savedSurround ? 'ON' : 'OFF';
     surrToggle.addEventListener('change', () => {
       const on = surrToggle.checked;
       surrStatus.textContent = on ? 'ON' : 'OFF';
@@ -612,7 +726,10 @@ function initEffectsPanel() {
   // Bass Boost toggle
   const bassToggle = document.getElementById('bassBoostToggle');
   const bassStatus = document.getElementById('bassBoostStatus');
+  const savedBass = localStorage.getItem('fx_bass_boost') === 'true';
   if (bassToggle) {
+    bassToggle.checked = savedBass;
+    if (bassStatus) bassStatus.textContent = savedBass ? 'ON' : 'OFF';
     bassToggle.addEventListener('change', () => {
       const on = bassToggle.checked;
       bassStatus.textContent = on ? 'ON' : 'OFF';
@@ -1103,13 +1220,13 @@ function renderResults(stations, isAppend = false) {
     const country = s.country || '';
     const bitrate = s.bitrate || '';
     const codec = s.codec || '';
-    const inPl = playlist.some((p) => p.uuid === uuid);
+    const inPl = playlist.some((p) => (uuid && p.uuid === uuid) || (url && p.url === url));
 
     const tagList = tags ? tags.split(',').map(t => t.trim()).filter(Boolean).slice(0, 3) : [];
     const badgeHtml = [
-      bitrate ? `<span class="badge badge-bitrate">${bitrate}k</span>` : '',
-      codec ? `<span class="badge badge-codec">${codec}</span>` : '',
-      country ? `<span class="badge badge-country">${country}</span>` : '',
+      bitrate ? `<span class="badge badge-bitrate">${escHtml(bitrate)}k</span>` : '',
+      codec ? `<span class="badge badge-codec">${escHtml(codec)}</span>` : '',
+      country ? `<span class="badge badge-country">${escHtml(country)}</span>` : '',
     ].filter(Boolean).join('');
 
     return `
@@ -1133,11 +1250,11 @@ function renderResults(stations, isAppend = false) {
           <div class="station-name-row">
             <button class="btn-play-card" title="Reproducir"><i class="fas fa-play"></i></button>
             <div class="station-name">
-              ${name}
+              ${escHtml(name)}
               <span class="health-badge checking" title="Verificando..."><i class="fas fa-spinner fa-spin"></i></span>
             </div>
           </div>
-          ${tagList.length ? `<div class="station-tags">${tagList.join(', ')}</div>` : ''}
+          ${tagList.length ? `<div class="station-tags">${escHtml(tagList.join(', '))}</div>` : ''}
           <div class="station-card-badges">${badgeHtml}</div>
         </div>
         <div class="station-card-footer">
@@ -1289,12 +1406,16 @@ function play(url, name, uuid) {
   if (displayTime) displayTime.textContent = '00:00';
 
   // Only proxy HTTP streams (mixed content blocked by browser).
-  // HTTPS streams play directly; crossOrigin omitted to avoid CORS issues.
+  // HTTPS streams play directly; no se fuerza CORS.
   const isHttp = url.startsWith('http://');
-  const finalUrl = isHttp ? `proxy?url=${encodeURIComponent(url)}` : url;
+  const finalUrl = isHttp ? getApiUrl(`/proxy?url=${encodeURIComponent(url)}`) : url;
   console.log('[PLAY] finalUrl=%s proxied=%s', finalUrl, isHttp ? 'yes' : 'no');
 
-  audio.crossOrigin = isHttp ? 'anonymous' : '';
+  if (isHttp) {
+    audio.crossOrigin = 'anonymous';
+  } else {
+    audio.removeAttribute('crossOrigin');
+  }
   audio.src = finalUrl;
   audio.load();
 
@@ -1581,9 +1702,25 @@ async function syncCuratedFromServer() {
             added++;
           }
         });
-        if (added > 0) {
+        if (added > 0 || playlist.length > 0) {
+          // Ordenar respetando la posición curatorial asignada en el servidor/admin
+          playlist.sort((a, b) => {
+            const posA = typeof a.position === 'number' ? a.position : 9999;
+            const posB = typeof b.position === 'number' ? b.position : 9999;
+            if (posA !== posB) return posA - posB;
+            const aIsChile = (a.country || '').toLowerCase() === 'chile';
+            const bIsChile = (b.country || '').toLowerCase() === 'chile';
+            if (aIsChile && !bIsChile) return -1;
+            if (!aIsChile && bIsChile) return 1;
+            return 0;
+          });
           persistPlaylist();
           renderPlaylist();
+          const resultsEl = document.getElementById('results');
+          if (resultsEl && (!resultsEl.children.length || activeQueue === 'playlist')) {
+            renderResults(playlist);
+            setTimeout(initCarousel, 50);
+          }
         }
       }
     }
@@ -1729,8 +1866,8 @@ function renderPlaylist() {
             <span class="pl-name">${escHtml(s.name || 'Sin nombre')}</span>
           </div>
           <div class="pl-meta">
-            ${s.bitrate ? `<span class="badge badge-bitrate">${s.bitrate}k</span>` : ''}
-            ${s.codec ? `<span class="badge badge-codec">${s.codec}</span>` : ''}
+            ${s.bitrate ? `<span class="badge badge-bitrate">${escHtml(s.bitrate)}k</span>` : ''}
+            ${s.codec ? `<span class="badge badge-codec">${escHtml(s.codec)}</span>` : ''}
             ${s.country ? `<span class="badge badge-country">${escHtml(s.country)}</span>` : ''}
             ${s.language ? `<span class="badge badge-lang">${escHtml(s.language)}</span>` : ''}
           </div>
@@ -2402,7 +2539,7 @@ function updateTimerModalUI() {
         if (station) stationName = station.name;
       }
       alarmStatusDiv.innerHTML = `
-        <span>🔔 Activa a las <strong>${alarmTime}</strong> sintonizando <em>"${stationName}"</em>.</span>
+        <span>🔔 Activa a las <strong>${escHtml(alarmTime)}</strong> sintonizando <em>"${escHtml(stationName)}"</em>.</span>
       `;
       alarmStatusDiv.classList.add('active');
     } else {
@@ -2499,9 +2636,10 @@ function triggerAlarm() {
       play(first.url, first.name, first.uuid);
     } else {
       if (marquee) marquee.textContent = '⏰ ¡ALARMA! (No hay radios guardadas en tu playlist)';
-      // Play sponsored 1 as fallback
       const fallback = SPONSORED_STATIONS[0];
-      play(fallback.url, fallback.name, fallback.uuid);
+      if (fallback) {
+        play(fallback.url, fallback.name, fallback.uuid);
+      }
     }
   }
 }
@@ -2830,6 +2968,12 @@ function showSongPopup(data) {
   clearTimeout(songPopupTimer);
   clearTimeout(songPopupDismissTimer);
 
+  const saveLocalBtn = document.getElementById('popupSaveLocalBtn');
+  if (saveLocalBtn) {
+    saveLocalBtn.classList.remove('saved');
+    saveLocalBtn.onclick = () => saveSongToLocalHistory(data);
+  }
+
   const addBtn = document.getElementById('popupAddBtn');
   if (addBtn) {
     addBtn.classList.remove('added');
@@ -2864,6 +3008,68 @@ function showSongPopup(data) {
   songPopupTimer = setTimeout(() => {
     hideSongPopup();
   }, 30000);
+}
+
+/* ── Guardar en historial de localStorage a petición del usuario (hora, título, artista) ── */
+function saveSongToLocalHistory(data) {
+  const btn = document.getElementById('popupSaveLocalBtn');
+  const body = document.getElementById('songPopupBody');
+  if (!body) return;
+
+  const artist = (data.artist || '').trim();
+  const track = (data.track || data.raw_title || '').trim();
+
+  if (!track && !artist) return;
+
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const dateStr = now.toISOString().split('T')[0];
+
+  const item = {
+    time: timeStr,
+    date: dateStr,
+    timestamp: now.getTime(),
+    track: track,
+    artist: artist || null,
+    station: currentPlayingStation?.name || null
+  };
+
+  let history = [];
+  try {
+    const raw = localStorage.getItem('radios_song_history');
+    if (raw) history = JSON.parse(raw);
+  } catch (e) {
+    history = [];
+  }
+
+  // Evitar duplicados inmediatos idénticos
+  const isDuplicate = history.length > 0 && 
+    history[0].track === item.track && 
+    history[0].artist === item.artist && 
+    (item.timestamp - history[0].timestamp < 60000);
+
+  if (!isDuplicate) {
+    history.unshift(item);
+    if (history.length > 100) history = history.slice(0, 100);
+    try {
+      localStorage.setItem('radios_song_history', JSON.stringify(history));
+    } catch (e) {
+      console.warn('[HISTORY] Error saving to localStorage:', e);
+    }
+  }
+
+  if (btn) btn.classList.add('saved');
+
+  let msgEl = body.querySelector('.popup-playlist-msg');
+  if (!msgEl) {
+    msgEl = document.createElement('div');
+    msgEl.className = 'popup-playlist-msg';
+    body.appendChild(msgEl);
+  }
+
+  msgEl.innerHTML = `<i class="fas fa-bookmark"></i> Guardado en historial personal (${timeStr})`;
+  msgEl.classList.add('visible');
+  setTimeout(() => msgEl.classList.remove('visible'), 3000);
 }
 
 /* ── Guardar canción en playlist del servidor (desde popup 'Está Sonando') ── */

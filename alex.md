@@ -1,6 +1,45 @@
 # Radios App - DonAlex Homelab
 
 ## Último Realizado
+- **09 de Septiembre 2026 (v1.5.6 - Integración Gemini Spark / MCP):**
+  - **Conexión al Gateway MCP Unificado**: Integrado el servicio de radios al puente central `bridge.py` (`https://donalex.van-solfeggio.ts.net/mcp`).
+  - **Herramientas de Música y Streaming**:
+    - `radios_listar_emisoras`: Exploración y filtrado por género/categoría del catálogo curado de estaciones.
+    - `radios_buscar_letras`: Consulta de letras (Lyrics) consumiendo el motor local (`/api/lyrics`).
+    - `radios_ultimas_canciones`: Consulta del historial en vivo de canciones identificadas en el homelab (`radios_curated.db`).
+  - **Impacto**: Gemini Spark ahora puede recomendar estaciones del homelab, buscar letras de canciones y saber qué música ha estado sonando en tus radios.
+- **09 de Septiembre 2026 (v1.5.5):**
+  - **Corrección de Error "Network Error" en PWA Android**:
+    - **Ajuste de `manifest.json`**: Se cambiaron `start_url` y `scope` de rutas absolutas duras (`/radios/`) a relativas (`./`), permitiendo que al instalar la aplicación desde la raíz (ej. por Tailscale Funnel en el puerto 10000: `https://...:10000/`), Android abra correctamente la app en la ruta actual sin desviar hacia un subpath inexistente.
+    - **Reescritura Resiliente del Service Worker (`sw.js`)**:
+      - Detección automática del path base (`basePath`) para soportar indistintamente raíz (`/`) y subdirectorios (`/radios/`).
+      - Precarga con `Promise.allSettled` para evitar que un asset individual impida la activación de la caché.
+      - Mecanismo de navegación offline/fallback: en caso de caída temporal de red o peticiones de navegación HTML, el Service Worker sirve el `index.html` cacheado en lugar de romper con un `503 Network error`.
+      - Exclusión explícita del SW para endpoints dinámicos de audio y API (`/api/` y `/proxy`).
+    - **Incremento de Versión**: Subido a `v1.5.5` en `version_check.json`, `app.js`, `index.html` (cache-busting v1.6.4) y `sw.js` (`radios-sketch-v1.6.4`).
+- **03 de Septiembre 2026 (v1.5.4):**
+  - **Sanitización y Validación Anti-Alucinación en Realidad Aumentada de Metadatos**:
+    - **Limpieza de Prefijos de Emisoras**: Eliminación automática de prefijos radiales como `Now On Air:`, `Now Playing:`, `Sintonizas:` y sufijos de branding de emisora (`| 98.5 FM`, `// Online`, etc.) que contaminaban el nombre del artista o título.
+    - **Reparación de Apóstrofes Truncados**: Restauración inteligente de cortes habituales en encoders ICY (ej. `Don` -> `Don't`, `It` -> `It's`) previniendo que canciones icónicas (como *Don't Go* de Yazoo o *Don't Stop Me Now* de Queen) queden incompletas.
+    - **Validación Estricta Anti-Falsos Positivos en Wikipedia y DuckDuckGo**: Filtro contextual que descarta coincidencias con libros, novelas (*Don Quijote*), biografías de futbolistas o artículos ajenos a la música a menos que haya coincidencia explícita con el artista y términos musicales (`song`, `single`, `canción`).
+    - **Búsqueda Resiliente en MusicBrainz**: Agregado fallback de búsqueda general por artista + tema si la búsqueda estricta Lucene no devuelve resultados inmediatos.
+    - **Purga de Caché Corrupta**: Eliminadas de `song_cache` (`radios_curated.db`) las entradas erróneas históricas que mostraban desambiguaciones absurdas.
+  - **Guardado en Historial Personal a Petición del Usuario (`localStorage`)**:
+    - Agregado un botón discreto de marcador / bookmark (`#popupSaveLocalBtn` con icono `fa-bookmark`) en la cabecera del modal *"Está Sonando"*.
+    - Al hacer clic, almacena en `localStorage` (`radios_song_history`) la **hora exacta**, **fecha**, **título de la canción**, **artista** y **emisora**, con notificación visual temporal (`Guardado en historial personal (HH:MM:SS)`). Solo se guarda cuando el usuario lo solicita explícitamente.
+  - **Actualización de Versión**: Incrementada versión a `1.5.4` (`version_check.json`, `app.js`, `index.html` cache busting v1.6.3 y Service Worker `sw.js`).
+- **03 de Septiembre 2026 (v1.5.3):**
+  - **Control de Volumen Ultrafino Auto-Expandible (Micro Slider)**:
+    - Diseñado un control de volumen horizontal ultrafino (~3.5px de altura en reposo) ubicado justo bajo la botonera de transporte para optimizar al máximo el espacio vertical en pantalla.
+    - **Expansión Táctil Dinámica**: Al hacer hover o tocarlo con el dedo, la pista se expande suavemente a 9px, despliega el porcentaje en tiempo real (`0%` a `100%`) y muestra un botón interactivo de mute/unmute con icono dinámico (`fa-volume-high`, `fa-volume-low`, `fa-volume-xmark`).
+    - Al soltar la interacción, se repliega automáticamente tras 1.4 segundos para mantener la estética limpia y minimalista.
+    - Persistencia en `localStorage` (`radios_volume`) y sincronización bidireccional con el reproductor Plyr.
+  - **Actualización de Versión de la App**: Incrementada versión a `1.5.3` en `version_check.json`, `app.js`, `index.html` (v1.6.2 cache busting) y Service Worker `sw.js` para gatillar la actualización automática en todos los dispositivos conectados.
+  - **Panel de Administración Curated Radios Admin** (`/radios/admin` o `/radios/admin.html`):
+    - **Acceso Exclusivo por Tailscale**: Protegido a nivel de red para IPs del rango CGNAT Tailscale (`100.64.0.0/10`), IPv6 Tailscale (`fd7a:115c:a1e0::/48`) y loopback, bloqueando con 403 accesos externos y llamadas desde el Funnel público.
+    - **Soporte Transparente tras Nginx**: Ajustado `server.py` y `admin.js` (`getApiUrl`) para que funcione tanto en acceso directo como bajo el subpath `/radios/` (`/radios/admin`, `/radios/admin/` y `/radios/admin.html`), resolviendo peticiones de proxy con `X-Real-IP`.
+    - **Reordenamiento Interactivo de Emisoras**: Controles directos en cada tarjeta (flechas `▲` / `▼`) y campo numérico de posición para subir o bajar la prioridad de cada radio. Se sincroniza con el endpoint `POST /api/curated/reorder` y respeta el orden asignado (`ORDER BY position ASC`) tanto en el backend como en el frontend de los navegadores (`app.js`).
+    - **Gestión Curatorial Completa**: Grilla con datos de estaciones (logo, nombre, país, tags, posición, bitrate, codec), buscador en tiempo real, reproductor de prueba para testear streams en directo antes de guardar, modal de edición con **campo editorial (`editorial_notes`)** y toggle de **estación destacada (`is_featured`)**, además de pestaña para descubrir e importar emisoras directamente desde Radio Browser API.
 - **30 de Agosto 2026:** Configurado **Tailscale Funnel** público en el puerto `10000` redirigido a `8000` de forma segura. Permite compartir la aplicación con terceros de forma pública sin exponer otros servicios de Nginx (manteniendo el puerto 443 en "tailnet only") y sin usar dominios comerciales. Se preparó también el backend con `Dockerfile` y `requirements.txt` y se actualizó `server.py` para soportar puertos y variables de entorno dinámicas.
 - **18 de Agosto 2026:** Implementado "Modo Directo iOS" para bypassear la cadena de efectos (AudioContext) en iPhone/iPad y evitar que el audio se corte en segundo plano.
 - [x] **Filtro de Noticias Repetidas** (2026-08-02):

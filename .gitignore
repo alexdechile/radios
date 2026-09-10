@@ -19,3 +19,6 @@ playlists/
 # Noticiero output y caché
 noticiero.json
 noticiero_history.json
+
+# Rate limit persistente
+radios_rate_limit.db*

@@ -2,24 +2,22 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Radios App</title>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="vendor/fonts/inter.css">
 
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
 
-  <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css">
+  <link rel="stylesheet" href="vendor/plyr/plyr.css">
 
-  <link rel="stylesheet" href="style.css?v=1.6.1">
+  <link rel="stylesheet" href="style.css?v=1.6.4">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#D4A017">
   <link rel="apple-touch-icon" href="icon-192.png">
 
   <!-- HTMX — polling automático sin escribir JS -->
-  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js" defer></script>
+  <script src="vendor/htmx/htmx.min.js" defer></script>
 </head>
 <body>
 
@@ -340,6 +338,18 @@
           <button class="btn-transport btn-playlist-toggle" id="btnPlaylistToggle" title="Playlist / Favoritos"><i class="fas fa-list-ul"></i></button>
         </div>
 
+        <!-- Micro Volume Slider (ultrafino, auto-expandible al interactuar) -->
+        <div class="volume-micro-wrap" id="volumeMicroWrap" title="Control de volumen">
+          <button class="volume-micro-icon" id="btnVolumeMute" title="Silenciar / Activar sonido">
+            <i class="fas fa-volume-high" id="volumeIcon"></i>
+          </button>
+          <div class="volume-micro-track" id="volumeMicroTrack">
+            <div class="volume-micro-fill" id="volumeMicroFill" style="width: 100%;"></div>
+            <input type="range" id="volumeSlider" class="volume-micro-input" min="0" max="100" value="100" step="1" aria-label="Volumen">
+          </div>
+          <span class="volume-micro-badge" id="volumeMicroBadge">100%</span>
+        </div>
+
         <!-- Botones ocultos para compatibilidad de eventos en JS -->
         <button id="tabResults" class="hidden"></button>
         <button id="tabPlaylist" class="hidden"></button>
@@ -451,6 +461,7 @@
         <div class="song-popup-header">
           <span class="song-popup-icon"><i class="fas fa-compact-disc"></i></span>
           <span class="song-popup-title">Está Sonando</span>
+          <button class="song-popup-save-local-btn" id="popupSaveLocalBtn" title="Guardar en historial personal (hora y canción)"><i class="fas fa-bookmark"></i></button>
           <button class="song-popup-add-btn" id="popupAddBtn" title="Agregar a playlist"><i class="fas fa-plus"></i></button>
           <button class="song-popup-close-btn" id="popupCloseBtn" title="Cerrar"><i class="fas fa-times"></i></button>
         </div>
@@ -494,8 +505,8 @@
     </div>
   </main>
 
-  <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
-  <script src="app.js?v=1.6.1"></script>
+  <script src="vendor/plyr/plyr.js"></script>
+  <script src="app.js?v=1.6.4"></script>
 
   <!-- HTMX Bridge: actualiza hx-get con URL+nombre de la estación activa -->
   <script>
