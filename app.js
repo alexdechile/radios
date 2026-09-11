@@ -6,7 +6,7 @@
 const API_SERVERS = ['de1', 'de2', 'nl1', 'at1'];
 const UA = 'RadiosSketchApp/1.0';
 const STORE_KEY = 'radios_playlist';
-const APP_VERSION = '1.6.4';
+const APP_VERSION = '1.6.5';
 
 // Resolve API path relative to base path (handles /radios subpath on production)
 function getApiUrl(path) {
@@ -440,20 +440,26 @@ async function init() {
   }
 }
 
-function initEqualizer() {
+function initEqualizer(force = false) {
   const audio = document.getElementById('audioPlayer');
+
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  window.isIOSDirectAudio = isIOS;
+
   if (audioCtx) {
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
+    }
     return;
   }
 
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  // Por defecto usamos audio nativo. Web Audio se activa solo cuando el
+  // usuario abre el ecualizador o los efectos, para no romper la reproducción
+  // en Android/Windows.
+  if (!force) return;
 
   if (isIOS) {
     console.log('[iOS] Bypassing AudioContext for HTML5 Audio to allow background play.');
-    window.isIOSDirectAudio = true;
     const eqBtn = document.getElementById('btnEqToggle');
     if (eqBtn) {
        eqBtn.style.opacity = '0.5';
@@ -464,7 +470,19 @@ function initEqualizer() {
          alert('Los efectos de audio están desactivados en iPhone/iPad para evitar cortes cuando se bloquea la pantalla.');
        };
     }
-    return; // Do not connect media element source
+    return;
+  }
+
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  } catch (e) {
+    console.error('AudioContext error:', e);
+    audioCtx = null;
+    return;
+  }
+
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
   }
 
   // Build EQ filter chain
@@ -474,7 +492,7 @@ function initEqualizer() {
     filter.frequency.value = band.freq;
     filter.Q.value = 1.4;
     const saved = parseFloat(localStorage.getItem(`eq_band_${i}`) || '0');
-    filter.gain.value = saved;
+    filter.gain.value = Number.isFinite(saved) ? saved : 0;
     return filter;
   });
 
@@ -493,9 +511,15 @@ function initEqualizer() {
     node.connect(duckGain);
     duckGain.connect(audioCtx.destination);
   } catch (e) {
+    console.error('No se pudo conectar Web Audio, se mantiene audio nativo:', e);
+    try { audioCtx.close(); } catch (_) {}
     audioCtx = null;
     eqFilters = [];
     effectsInjected = false;
+    if (duckGain) {
+      try { duckGain.disconnect(); } catch (_) {}
+      duckGain = null;
+    }
     return;
   }
 
@@ -505,7 +529,7 @@ function initEqualizer() {
     const valEl  = document.getElementById(`eqVal${i}`);
     if (!slider || !eqFilters[i]) return;
     const saved = parseFloat(localStorage.getItem(`eq_band_${i}`) || '0');
-    slider.value = saved;
+    slider.value = Number.isFinite(saved) ? saved : 0;
     valEl.textContent = saved > 0 ? `+${saved}` : `${saved}`;
   });
 }
@@ -519,6 +543,7 @@ function initEqPanel() {
   function toggleEq() {
     eqActive = !eqActive;
     panel.classList.toggle('hidden', !eqActive);
+    if (eqActive) initEqualizer(true);
     if (btnToggle) btnToggle.classList.toggle('eq-active', eqActive);
     // Close info panel if open
     if (eqActive && infoActive) {
@@ -672,6 +697,7 @@ function initEffectsPanel() {
   function toggleEffects() {
     effectsActive = !effectsActive;
     panel.classList.toggle('hidden', !effectsActive);
+    if (effectsActive) initEqualizer(true);
     if (btnToggle) btnToggle.classList.toggle('effects-active', effectsActive);
     // Close EQ panel if open
     if (effectsActive && eqActive) {

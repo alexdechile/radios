@@ -1,13 +1,13 @@
-const CACHE_NAME = 'radios-sketch-v1.6.4';
+const CACHE_NAME = 'radios-sketch-v1.6.5';
 
 // Determinar el prefijo base según dónde esté instalado el Service Worker (ej. '/' o '/radios/')
 const basePath = self.location.pathname.substring(0, self.location.pathname.lastIndexOf('/') + 1);
 
 const RELATIVE_ASSETS = [
   '',
-  'index.html?v=1.6.4',
-  'style.css?v=1.6.4',
-  'app.js?v=1.6.4',
+  'index.html?v=1.6.5',
+  'style.css?v=1.6.5',
+  'app.js?v=1.6.5',
   'radios_db.json',
   'manifest.json',
   'icon.svg',
@@ -94,7 +94,7 @@ self.addEventListener('fetch', (e) => {
         if (cached) return cached;
 
         if (e.request.mode === 'navigate' || e.request.headers.get('accept')?.includes('text/html')) {
-          const indexCached = await caches.match(basePath) || await caches.match(basePath + 'index.html?v=1.6.4');
+          const indexCached = await caches.match(basePath) || await caches.match(basePath + 'index.html?v=1.6.5');
           if (indexCached) return indexCached;
         }
 
