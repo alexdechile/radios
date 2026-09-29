@@ -1,6 +1,30 @@
 # Radios App - DonAlex Homelab
 
 ## Último Realizado
+- **29 de Septiembre 2026 (v1.6.18 - Calidad de metadatos y pulido visual):**
+  - **Selección de Álbum y Lista de Temas Corregida** (`radios_app/handlers/media_info.py`): el scorer ahora puntúa por separado artista y título (exige un mínimo en cada uno, lo que evita aceptar covers u homónimos como "Kiss" vs "Kissin' Dynamite"); se combinan consultas que priorizan releases oficiales y descartan en vivo; los bootlegs y ediciones remix reciben penalización; y a igual calidad se prefiere la edición más antigua. La constante `SONGINFO_CACHE_VERSION` pasó a 3 para invalidar la caché previa. Verificado: Queen → *A Night at the Opera*, Los Prisioneros → *Corazones*, Adele → *25*.
+  - **Portadas en HTTPS**: las imágenes de Cover Art Archive se normalizan a `https://` para no quedar bloqueadas como mixed content.
+  - **Upsert Seguro en Admin** (`radios_app/handlers/admin.py`): `handle_add_curated` dejó de usar `INSERT OR REPLACE` (que borraba alias y notas omitidas) y ahora actualiza solo los campos enviados, excluyendo el propio uuid del chequeo de alias duplicado.
+  - **Endurecimiento Frontend**: `?play=<url>` funciona sin `?name=`; el precache del Service Worker cae a la ruta sin `?v=` para el primer arranque offline; y el comando de voz ya no puede iniciar dos sesiones por un mismo toque.
+  - **Pulido Visual**: variables CSS compartidas para las superficies oscuras (reproductor, novedades, badge de voz), modal de novedades alineado con el del reproductor, y las portadas genéricas de las tarjetas ahora dejan ver el degradado pastel en vez de un fondo blanco.
+- **29 de Septiembre 2026 (v1.6.17 - Correcciones de flujo):**
+  - **Metadata tras Autoplay Bloqueado**: `startMetadataTracker()` ahora es idempotente y se invoca también desde `player.on('play')`, de modo que al pulsar Reproducir tras un bloqueo de autoplay se reactivan el marquee, el "Ahora Suena" y el popup automático de canción.
+  - **Proxy Web Audio solo con Grafo Real**: `shouldProxyForWebAudio()` depende únicamente de `!!audioCtx`. En iOS (o si falla `new AudioContext()`) ya no se fuerza el paso de todas las emisoras por `/proxy` cuando el panel de EQ/Efectos está abierto sin grafo activo.
+  - **Autocierre del Popup Restaurado**: Nuevo helper `restartSongPopupAutoClose()`; al cerrar la portada ampliada, colapsar el álbum/letra o interactuar con el cuerpo del popup se reprograma el cierre a 60 s (antes quedaba abierto indefinidamente tras ampliar la portada).
+  - **Comandos de Voz sin Falsos Positivos**: "para" ya no pausa como preposición; solo actúa como comando si la frase es exactamente "para" / "para la radio". Frases como "pon la radio para dormir" sintonizan correctamente.
+  - **Changelog en Recarga Manual**: `checkChangelogOnBoot()` ahora lee `radios_pending_changelog`, por lo que el botón "Actualizar" vuelve a mostrar las novedades aunque la versión no cambie.
+  - **Hallazgos Pendientes (no corregidos aún)**: scorer de MusicBrainz puede elegir el artista/álbum equivocado (`media_info.py`), portadas CAA llegan por `http://`, y `INSERT OR REPLACE` en `admin.py` sin `exclude_uuid` puede borrar el alias al re-agregar un uuid existente.
+- **29 de Septiembre 2026 (v1.6.16):**
+  - **Radio Recordada al Abrir la App**: La última emisión sintonizada se persiste en `localStorage` (clave `radios_last_station`) y se restaura al iniciar, de modo que la PWA reabre siempre en la misma radio.
+  - **Reinicio Respetuoso con el Navegador**: Se intenta reproducir automáticamente; si el navegador lo bloquea (política de auto-play en móvil), la emisión queda cargada y la app muestra *"🎵 Pulsa Reproducir para iniciar"*, bastando un toque en el botón de transporte para encenderla.
+  - **Prioridad de Deep Links**: `?play=<url>&name=<nombre>` y `?radio=<alias>` / `?estacion=` / `?station=` siguen teniendo prioridad sobre el autoinicio, y la radio que abrían pasa a ser la nueva última sintonizada.
+  - **Versión Centralizada en el Service Worker**: `sw.js` ahora deriva `CACHE_NAME` y los assets con `?v=` desde una única constante `APP_V`, corrigiendo el fallback offline de navegación que seguía apuntando a `index.html?v=1.6.14` (ya nunca encontraba coincidencia en caché tras cada bump).
+  - **Novedades del Modal de Inicio**: Registrada la entrada `WHATS_NEW['1.6.16']` con los cambios de esta versión, siguiendo la convención de mostrar el modal de novedades + tutorial una vez por actualización.
+- **21 de Septiembre 2026 (v1.6.15):**
+  - **Botón de Voz en Toolbar**: Reubicado el comando de voz a un botón dedicado con icono de micrófono al inicio de la barra de acciones (`.app-header-actions`), con animación pulsante al estar escuchando.
+  - **Eliminación del Long-Press de Voz**: Removida la lógica de clic sostenido en la tarjeta *"Está Sonando"* que interfería con la apertura del modal en pantallas táctiles y móviles.
+  - **Restauración de Auto-apertura y Auto-cierre en 1 Minuto**: El modal de detalles de canción vuelve a desplegarse automáticamente al detectar un tema y se cierra tras **1 minuto (60 segundos)**; pausándose además si el usuario amplía la portada, lee la letra o despliega los temas del álbum.
+  - **Apertura Inmediata por Clic**: Sustituido el esquema `pointerdown/pointerup` por un listener de `click` directo que responde a la primera sin riesgo de `pointercancel` por leve desplazamiento táctil.
 - **09 de Septiembre 2026 (v1.5.6 - Integración Gemini Spark / MCP):**
   - **Conexión al Gateway MCP Unificado**: Integrado el servicio de radios al puente central `bridge.py` (`https://donalex.van-solfeggio.ts.net/mcp`).
   - **Herramientas de Música y Streaming**:
