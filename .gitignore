@@ -22,3 +22,6 @@ noticiero_history.json
 
 # Rate limit persistente
 radios_rate_limit.db*
+
+# Cachés de runtime (metadata de canción y letras)
+radios_cache.db*

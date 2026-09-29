@@ -10,6 +10,9 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 
 PORT = int(os.environ.get("PORT", 8000))
 DB_PATH = str(ROOT_DIR / "radios_curated.db")
+# Cachés de runtime (song_cache, lyrics_cache) en su propia base, ignorada por
+# git: así el catálogo curado versionado no se ensucia al reproducir canciones.
+CACHE_DB_PATH = os.environ.get("CACHE_DB_PATH", str(ROOT_DIR / "radios_cache.db"))
 RATE_LIMIT_DB = os.environ.get(
     "RATE_LIMIT_DB", str(ROOT_DIR / "radios_rate_limit.db")
 )

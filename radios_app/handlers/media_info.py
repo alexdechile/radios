@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 
 from scrapling.fetchers import Fetcher
 
-from radios_app.storage import open_db
+from radios_app.storage import open_cache_db
 
 # Versión del algoritmo de metadata. Al aumentarla, las entradas viejas de
 # song_cache se consideran obsoletas y se vuelven a consultar.
@@ -32,7 +32,7 @@ class MediaInfoMixin:
                 self.send_json({"error": "No title provided"}, 400)
                 return
 
-            conn = open_db()
+            conn = open_cache_db()
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
 
@@ -77,7 +77,7 @@ class MediaInfoMixin:
             result = self._search_song_info(raw_title)
 
             if result.get("source"):
-                conn = open_db()
+                conn = open_cache_db()
                 c = conn.cursor()
                 c.execute(
                     """
@@ -158,7 +158,7 @@ class MediaInfoMixin:
                 return
 
             # ── Check cache (30-day TTL) ──
-            conn = open_db()
+            conn = open_cache_db()
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
             c.execute("SELECT * FROM lyrics_cache WHERE raw_title = ?", (cache_key,))
@@ -196,7 +196,7 @@ class MediaInfoMixin:
             lyrics, source = self._search_lyrics(artist, track)
 
             # Store in cache (even negatives, so we don't hammer sources)
-            conn = open_db()
+            conn = open_cache_db()
             c = conn.cursor()
             c.execute(
                 """
