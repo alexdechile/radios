@@ -1,13 +1,17 @@
-const CACHE_NAME = 'radios-sketch-v1.6.5';
+// Versión de la app. Debe coincidir con APP_VERSION en app.js, el ?v= de
+// index.html y version_check.json. Al subirla se renombra la caché y el SW
+// vuelve a bajar todos los assets.
+const APP_V = '1.6.18';
+const CACHE_NAME = `radios-sketch-v${APP_V}`;
 
 // Determinar el prefijo base según dónde esté instalado el Service Worker (ej. '/' o '/radios/')
 const basePath = self.location.pathname.substring(0, self.location.pathname.lastIndexOf('/') + 1);
 
 const RELATIVE_ASSETS = [
   '',
-  'index.html?v=1.6.5',
-  'style.css?v=1.6.5',
-  'app.js?v=1.6.5',
+  `index.html?v=${APP_V}`,
+  `style.css?v=${APP_V}`,
+  `app.js?v=${APP_V}`,
   'radios_db.json',
   'manifest.json',
   'icon.svg',
@@ -93,8 +97,20 @@ self.addEventListener('fetch', (e) => {
         const cached = await caches.match(e.request);
         if (cached) return cached;
 
+        // Los assets precacheados se guardan por pathname (sin ?v=), así que
+        // en un primer arranque offline hay que buscar sin la query.
+        if (url.search) {
+          const cachedByPath = await caches.match(url.pathname);
+          if (cachedByPath) return cachedByPath;
+        }
+
         if (e.request.mode === 'navigate' || e.request.headers.get('accept')?.includes('text/html')) {
-          const indexCached = await caches.match(basePath) || await caches.match(basePath + 'index.html?v=1.6.5');
+          // ASSETS se guarda por pathname (sin el ?v=), así que el fallback
+          // debe buscar '/', '/index.html' y la URL pedida con query.
+          const indexCached =
+            await caches.match(basePath) ||
+            await caches.match(`${basePath}index.html`) ||
+            await caches.match(`${basePath}index.html?v=${APP_V}`);
           if (indexCached) return indexCached;
         }
 

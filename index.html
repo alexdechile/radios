@@ -11,7 +11,7 @@
 
   <link rel="stylesheet" href="vendor/plyr/plyr.css">
 
-  <link rel="stylesheet" href="style.css?v=1.6.5">
+  <link rel="stylesheet" href="style.css?v=1.6.18">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#D4A017">
   <link rel="apple-touch-icon" href="icon-192.png">
@@ -36,6 +36,7 @@
           </svg>
         </div>
         <div class="app-header-actions">
+          <button class="btn-header" id="btnVoiceCommand" title="Comando de voz"><i class="fas fa-microphone"></i></button>
           <button class="btn-header" id="btnSearchToggle" title="Buscar"><i class="fas fa-search"></i></button>
           <button class="btn-header" id="btnExportJSON" title="Guardar lista como JSON">JSON</button>
           <button class="btn-header" id="btnImportJSON" title="Cargar lista desde JSON"><i class="fas fa-folder-open"></i></button>
@@ -223,6 +224,17 @@
           <div class="info-control">
             <label class="info-toggle">
               <input type="checkbox" id="infoLyricsToggle" checked>
+              <span class="info-toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">
+            <i class="fas fa-list-ul"></i> Lista de temas
+          </div>
+          <div class="info-control">
+            <label class="info-toggle">
+              <input type="checkbox" id="infoAlbumTracksToggle" checked>
               <span class="info-toggle-slider"></span>
             </label>
           </div>
@@ -467,9 +479,10 @@
         </div>
         <div class="song-popup-body" id="songPopupBody">
           <div class="song-popup-media-row" id="popupMediaRow">
-            <div class="song-popup-cover-wrap hidden" id="popupCoverWrap">
+            <button class="song-popup-cover-wrap hidden" id="popupCoverWrap" type="button" title="Ampliar portada" aria-label="Ampliar portada">
               <img class="song-popup-cover" id="popupCover" alt="Portada">
-            </div>
+              <span class="song-popup-cover-expand"><i class="fas fa-expand"></i></span>
+            </button>
             <div class="song-popup-titles">
               <div class="song-popup-track" id="popupTrack"></div>
               <div class="song-popup-artist" id="popupArtist"></div>
@@ -478,6 +491,8 @@
           <div class="song-popup-desc hidden" id="popupDesc"></div>
           <div class="song-popup-details" id="popupDetails"></div>
           <div class="song-popup-extras" id="popupExtras"></div>
+          <!-- Secciones dinámicas/extensibles del popup (album, etc.) -->
+          <div class="song-popup-dynamic-sections" id="popupDynamicSections"></div>
           <a class="song-popup-wiki-link hidden" id="popupWikiLink" target="_blank" rel="noopener">
             <i class="fab fa-wikipedia-w"></i> Ver en Wikipedia
           </a>
@@ -501,12 +516,38 @@
           </div>
         </div>
         <div class="song-popup-footer"></div>
+        <!-- Lightbox de portada: ocupa el tamaño del modal -->
+        <div class="song-popup-cover-lightbox hidden" id="popupCoverLightbox" aria-hidden="true">
+          <img class="song-popup-cover-large" id="popupCoverLarge" alt="Portada ampliada">
+          <button class="song-popup-cover-lightbox-close" id="popupCoverLightboxClose" type="button" title="Cerrar portada">
+            <i class="fas fa-compress"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Novedades + Tutorial (post-actualización) -->
+    <div class="changelog-overlay hidden" id="changelogOverlay">
+      <div class="changelog-card" role="dialog" aria-modal="true" aria-labelledby="changelogTitle">
+        <div class="changelog-header">
+          <span class="changelog-icon"><i class="fas fa-wand-magic-sparkles"></i></span>
+          <h2 id="changelogTitle">Novedades</h2>
+          <button class="changelog-close" id="changelogCloseBtn" type="button" title="Cerrar">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="changelog-progress" id="changelogProgress"></div>
+        <div class="changelog-body" id="changelogBody"></div>
+        <div class="changelog-footer">
+          <button class="changelog-btn changelog-btn-ghost hidden" id="changelogPrevBtn" type="button">Anterior</button>
+          <button class="changelog-btn changelog-btn-primary" id="changelogNextBtn" type="button">Ver tutorial</button>
+        </div>
       </div>
     </div>
   </main>
 
   <script src="vendor/plyr/plyr.js"></script>
-  <script src="app.js?v=1.6.5"></script>
+  <script src="app.js?v=1.6.18"></script>
 
   <!-- HTMX Bridge: actualiza hx-get con URL+nombre de la estación activa -->
   <script>

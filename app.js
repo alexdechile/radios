@@ -6,7 +6,7 @@
 const API_SERVERS = ['de1', 'de2', 'nl1', 'at1'];
 const UA = 'RadiosSketchApp/1.0';
 const STORE_KEY = 'radios_playlist';
-const APP_VERSION = '1.6.5';
+const APP_VERSION = '1.6.18';
 
 // Resolve API path relative to base path (handles /radios subpath on production)
 function getApiUrl(path) {
@@ -25,6 +25,7 @@ let searchResults = [];
 let activeQueue = 'playlist';
 let metadataInterval = null;
 let nowPlayingInterval = null;
+let metadataTrackerKey = null; // evita arrancar el tracker dos veces para la misma estación
 let audioCtx = null;
 let eqFilters = [];   // 5 BiquadFilter nodes
 let eqActive = false; // panel open state
@@ -61,6 +62,49 @@ function releaseWakeLock() {
 
 let currentPlayingStation = null; // { url, name, uuid }
 
+// Última radio sintonizada, para reabrir la app en la misma emisora.
+const LAST_STATION_KEY = 'radios_last_station';
+
+function saveLastStation(station) {
+  try {
+    if (!station || !station.url) {
+      localStorage.removeItem(LAST_STATION_KEY);
+      return;
+    }
+    localStorage.setItem(LAST_STATION_KEY, JSON.stringify({
+      url: station.url,
+      name: station.name || 'Radio',
+      uuid: station.uuid || '',
+      favicon: station.favicon || '',
+    }));
+  } catch (e) {
+    console.warn('No se pudo guardar la última radio:', e);
+  }
+}
+
+function getLastStation() {
+  try {
+    const raw = localStorage.getItem(LAST_STATION_KEY);
+    if (!raw) return null;
+    const station = JSON.parse(raw);
+    if (!station || typeof station.url !== 'string' || !station.url) return null;
+    return station;
+  } catch (e) {
+    console.warn('Última radio corrupta, se ignora.');
+    return null;
+  }
+}
+
+/* Al abrir la app intenta volver a la última radio. Si el navegador bloquea
+   el auto-play, play() deja la emisión cargada y esperando un toque. */
+function restoreLastStation() {
+  const last = getLastStation();
+  if (!last) return false;
+  console.log('[RESTORE] last station=%s', last.name);
+  play(last.url, last.name, last.uuid);
+  return true;
+}
+
 // EQ band config: [frequency Hz, type]
 const EQ_BANDS = [
   { freq: 60,    type: 'lowshelf'  },
@@ -75,6 +119,70 @@ const EQ_PRESETS = {
   bass:   [8,   4,   0,  -2,  -2 ],
   vocal:  [-2,  0,   5,   4,   0 ],
   treble: [-2, -2,   0,   4,   8 ],
+};
+
+/* ── Novedades y tutorial mostrados una vez después de actualizar ──
+   Agrega aquí una entrada por cada versión liberada: el modal de inicio
+   compara WHATS_NEW[APP_VERSION] con la versión ya vista (radios_changelog_seen)
+   y se muestra solo cuando no coinciden. */
+const WHATS_NEW = {
+  '1.6.18': {
+    items: [
+      { icon: 'fa-compact-disc', text: 'Álbum y lista de temas mucho más certeros: se elige la edición oficial y se descartan bootlegs, discos en vivo y remixes.' },
+      { icon: 'fa-image', text: 'Las portadas de Cover Art Archive ya no se bloquean en conexiones seguras (se normalizan a https).' },
+      { icon: 'fa-palette', text: 'Detalle visual: las portadas genéricas de las emisoras ahora lucen el degradado pastel de la app.' },
+      { icon: 'fa-wrench', text: 'Estabilidad: el comando de voz no se duplica y el enlace ?play= funciona aunque falte el nombre.' },
+    ],
+    tutorial: [
+      { icon: 'fa-microphone', title: 'Comandos de voz', text: 'Toca el ícono de micrófono al inicio de la barra superior para pedir una emisora por voz (ej. "reproduce infinita").' },
+      { icon: 'fa-compact-disc', title: 'Está Sonando', text: 'Toca la tarjeta para ver letra, detalles y portada en grande. Se auto-abre al cambiar de canción y se cierra tras 1 minuto.' },
+      { icon: 'fa-bookmark', title: 'Historial y playlist', text: 'Guarda tus canciones en tu historial personal con el marcador o agrégalas a tu playlist del servidor con el botón +.' },
+      { icon: 'fa-sliders', title: 'Efectos y ecualizador', text: 'Personaliza el sonido con el ecualizador gráfico y los efectos de audio desde la barra superior.' },
+    ],
+  },
+  '1.6.17': {
+    items: [
+      { icon: 'fa-wrench', text: 'La radio recordada ahora también reactiva el título y la canción en pantalla cuando pulsas Reproducir tras un bloqueo de autoplay.' },
+      { icon: 'fa-microphone', text: 'Comandos de voz más precisos: frases como "pon la radio para dormir" ya no la pausan por error.' },
+      { icon: 'fa-compact-disc', text: 'El detalle de canción vuelve a cerrarse solo tras 60 segundos, incluso después de ampliar la portada, la letra o los temas del álbum.' },
+      { icon: 'fa-mobile-screen-button', text: 'En iPhone, abrir el ecualizador o los efectos ya no fuerza que todas las emisoras pasen por el servidor.' },
+    ],
+    tutorial: [
+      { icon: 'fa-microphone', title: 'Comandos de voz', text: 'Toca el ícono de micrófono al inicio de la barra superior para pedir una emisora por voz (ej. "reproduce infinita").' },
+      { icon: 'fa-compact-disc', title: 'Está Sonando', text: 'Toca la tarjeta para ver letra, detalles y portada en grande. Se auto-abre al cambiar de canción y se cierra tras 1 minuto.' },
+      { icon: 'fa-bookmark', title: 'Historial y playlist', text: 'Guarda tus canciones en tu historial personal con el marcador o agrégalas a tu playlist del servidor con el botón +.' },
+      { icon: 'fa-sliders', title: 'Efectos y ecualizador', text: 'Personaliza el sonido con el ecualizador gráfico y los efectos de audio desde la barra superior.' },
+    ],
+  },
+  '1.6.16': {
+    items: [
+      { icon: 'fa-history', text: 'La app recuerda tu última radio: al volver a abrirla se sintoniza sola la misma emisión donde la dejaste.' },
+      { icon: 'fa-hand-pointer', text: 'Si el navegador bloquea el sonido automático, la radio igual queda cargada y lista: aparece "Pulsa Reproducir para iniciar" y un toque la enciende.' },
+      { icon: 'fa-link', text: 'Los enlaces profundos mantienen prioridad: ?radio=alias o ?play=... siguen abriéndote esa emisión al instante.' },
+    ],
+    tutorial: [
+      { icon: 'fa-microphone', title: 'Comandos de voz', text: 'Toca el ícono de micrófono al inicio de la barra superior para pedir una emisora por voz (ej. "reproduce infinita").' },
+      { icon: 'fa-compact-disc', title: 'Está Sonando', text: 'Toca la tarjeta para ver letra, detalles y portada en grande. Se auto-abre al cambiar de canción y se cierra tras 1 minuto.' },
+      { icon: 'fa-bookmark', title: 'Historial y playlist', text: 'Guarda tus canciones en tu historial personal con el marcador o agrégalas a tu playlist del servidor con el botón +.' },
+      { icon: 'fa-sliders', title: 'Efectos y ecualizador', text: 'Personaliza el sonido con el ecualizador gráfico y los efectos de audio desde la barra superior.' },
+    ],
+  },
+  '1.6.15': {
+    items: [
+      { icon: 'fa-microphone', text: 'Botón de voz en la toolbar: icono de micrófono dedicado al inicio de la barra superior con indicador visual al escuchar.' },
+      { icon: 'fa-hand-pointer', text: 'Apertura táctil limpia: se eliminó el clic sostenido en la tarjeta "Está Sonando", ahora abre al primer toque sin cancelaciones.' },
+      { icon: 'fa-clock', text: 'Auto-apertura y cierre en 1 minuto: el modal vuelve a mostrarse con cada tema y se oculta automáticamente tras 60 segundos.' },
+      { icon: 'fa-compact-disc', text: 'Portada ampliable y temas del álbum: visualización en grande de la carátula y listado completo de canciones del disco.' },
+      { icon: 'fa-sliders', text: 'Efectos de audio optimizados: ecualizador, Stereo Width, Surround y Bass Boost sin cortes de reproducción.' },
+      { icon: 'fa-link', text: 'Deep links por alias: abre directamente una emisora curada con ?radio=alias.' },
+    ],
+    tutorial: [
+      { icon: 'fa-microphone', title: 'Comandos de voz', text: 'Toca el ícono de micrófono al inicio de la barra superior para pedir una emisora por voz (ej. "reproduce infinita").' },
+      { icon: 'fa-compact-disc', title: 'Está Sonando', text: 'Toca la tarjeta para ver letra, detalles y portada en grande. Se auto-abre al cambiar de canción y se cierra tras 1 minuto.' },
+      { icon: 'fa-bookmark', title: 'Historial y playlist', text: 'Guarda tus canciones en tu historial personal con el marcador o agrégalas a tu playlist del servidor con el botón +.' },
+      { icon: 'fa-sliders', title: 'Efectos y ecualizador', text: 'Personaliza el sonido con el ecualizador gráfico y los efectos de audio desde la barra superior.' },
+    ],
+  },
 };
 
 // Timer & Alarm state
@@ -171,6 +279,16 @@ async function init() {
   player.on('play', () => {
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
     requestWakeLock();
+    // Si la reproducción arrancó por fuera de play() (botón de Plyr tras un
+    // autoplay bloqueado), hay que reactivar el marquee y el tracker de
+    // metadata: play() solo los lanza en su rama de éxito.
+    if (currentPlayingStation?.url) {
+      const displayEl = document.getElementById('radioDisplay');
+      if (displayEl && displayEl.textContent === '🎵 Pulsa Reproducir para iniciar') {
+        displayEl.textContent = `*** ${currentPlayingStation.name || 'Sintonizando...'} ***`;
+      }
+      startMetadataTracker(currentPlayingStation.uuid, currentPlayingStation.url);
+    }
   });
   player.on('pause', () => {
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
@@ -406,8 +524,14 @@ async function init() {
   const params = new URLSearchParams(window.location.search);
   const playUrl = params.get('play');
   const playName = params.get('name');
-  if (playUrl && playName) {
-    setTimeout(() => play(playUrl, playName), 1000);
+  const stationParam = params.get('radio') || params.get('estacion') || params.get('station');
+  // ?play= basta por sí solo: si no viene ?name= se usa un nombre genérico.
+  const hasDeepLink = !!playUrl || !!stationParam;
+  if (playUrl) {
+    setTimeout(() => play(playUrl, playName || 'Radio'), 1000);
+  } else if (stationParam) {
+    // Deep link por alias curado: ?radio=infinita
+    setTimeout(handleVoiceDeepLink, 1200);
   }
 
   // Init Timer & Alarm
@@ -438,9 +562,18 @@ async function init() {
     renderResults(playlist);
     setTimeout(initCarousel, 50);
   }
+
+  // Reabrir la app en la última radio sintonizada. Los deep links mandan sobre
+  // esto, así que ?play=... o ?radio=... siguen teniendo prioridad.
+  if (!hasDeepLink) {
+    setTimeout(restoreLastStation, 100);
+  }
+
+  // Mostrar novedades/tutorial una vez después de una recarga manual.
+  checkChangelogOnBoot();
 }
 
-function initEqualizer(force = false) {
+async function initEqualizer(force = false) {
   const audio = document.getElementById('audioPlayer');
 
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -448,7 +581,7 @@ function initEqualizer(force = false) {
 
   if (audioCtx) {
     if (audioCtx.state === 'suspended') {
-      audioCtx.resume().catch(() => {});
+      try { await audioCtx.resume(); } catch (_) {}
     }
     return;
   }
@@ -482,8 +615,13 @@ function initEqualizer(force = false) {
   }
 
   if (audioCtx.state === 'suspended') {
-    audioCtx.resume().catch(() => {});
+    try { await audioCtx.resume(); } catch (_) {}
   }
+
+  // Android/Chrome exigen que el <audio> esté en el mismo origen para que
+  // createMediaElementSource no silencie el stream. Si venía directo, lo
+  // reencaminamos por el proxy local antes de crear el grafo.
+  ensureCurrentStreamProxiedForWebAudio();
 
   // Build EQ filter chain
   eqFilters = EQ_BANDS.map((band, i) => {
@@ -523,6 +661,18 @@ function initEqualizer(force = false) {
     return;
   }
 
+  // Si el cambio de src dejó el audio pausado, reanudar sin salir del gesto.
+  if (audio.paused && currentPlayingStation?.url) {
+    try {
+      const resumePlayback = player ? player.play() : audio.play();
+      if (resumePlayback && typeof resumePlayback.catch === 'function') {
+        resumePlayback.catch((err) => console.warn('[FX] No se pudo reanudar el audio:', err));
+      }
+    } catch (err) {
+      console.warn('[FX] Error al reanudar audio:', err);
+    }
+  }
+
   // Sync slider UI to restored values
   EQ_BANDS.forEach((_, i) => {
     const slider = document.getElementById(`eqBand${i}`);
@@ -534,6 +684,51 @@ function initEqualizer(force = false) {
   });
 }
 
+/* ── Enrutamiento de audio para Web Audio ──
+   En Android/Chrome, createMediaElementSource sobre un stream cross-origin
+   puede dejar el audio en silencio. Cuando el grafo de efectos está activo
+   usamos el proxy same-origin para poder procesar el stream sin cortes. */
+function shouldProxyForWebAudio() {
+  // Solo cuando el grafo de Web Audio existe de verdad. No basta con que el
+  // panel esté abierto: en iOS/Android initEqualizer puede abortar sin crear
+  // el AudioContext, y en ese caso el audio debe seguir nativo (sin proxy).
+  return !!audioCtx;
+}
+
+function ensureCurrentStreamProxiedForWebAudio() {
+  const stationUrl = currentPlayingStation?.url;
+  const audio = document.getElementById('audioPlayer');
+  if (!stationUrl || !audio) return;
+
+  const proxyUrl = getApiUrl(`/proxy?url=${encodeURIComponent(stationUrl)}`);
+  let currentUrl = null;
+  let targetUrl = null;
+  try {
+    currentUrl = new URL(audio.src, window.location.href);
+    targetUrl = new URL(proxyUrl, window.location.href);
+  } catch (_) {
+    return;
+  }
+
+  const alreadyProxied =
+    currentUrl.pathname === targetUrl.pathname &&
+    currentUrl.searchParams.get('url') === stationUrl;
+  if (alreadyProxied) return;
+
+  const wasPlaying = !audio.paused;
+  // El proxy es same-origin: no necesita CORS y evita el silencio de Web Audio.
+  audio.removeAttribute('crossOrigin');
+  audio.src = proxyUrl;
+  audio.load();
+
+  if (wasPlaying && player) {
+    const resume = player.play();
+    if (resume && typeof resume.catch === 'function') {
+      resume.catch((err) => console.warn('[FX] No se pudo reanudar tras enrutar por proxy:', err));
+    }
+  }
+}
+
 /* ── EQ Panel UI ── */
 function initEqPanel() {
   const btnToggle = document.getElementById('btnEqToggle');
@@ -543,7 +738,7 @@ function initEqPanel() {
   function toggleEq() {
     eqActive = !eqActive;
     panel.classList.toggle('hidden', !eqActive);
-    if (eqActive) initEqualizer(true);
+    if (eqActive) initEqualizer(true).catch((e) => console.error('EQ error:', e));
     if (btnToggle) btnToggle.classList.toggle('eq-active', eqActive);
     // Close info panel if open
     if (eqActive && infoActive) {
@@ -697,7 +892,7 @@ function initEffectsPanel() {
   function toggleEffects() {
     effectsActive = !effectsActive;
     panel.classList.toggle('hidden', !effectsActive);
-    if (effectsActive) initEqualizer(true);
+    if (effectsActive) initEqualizer(true).catch((e) => console.error('FX error:', e));
     if (btnToggle) btnToggle.classList.toggle('effects-active', effectsActive);
     // Close EQ panel if open
     if (effectsActive && eqActive) {
@@ -1385,6 +1580,258 @@ function setupMediaSessionActions() {
   navigator.mediaSession.setActionHandler('stop', () => player.pause());
 }
 
+/* ── Deep link por alias de administrador ──
+   El admin define un "voice_name" único por emisora (ej. "infinita").
+   La app lo busca en la playlist y reproduce esa estación directamente. */
+function normalizeStationKey(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function findStationByVoiceName(query) {
+  const q = normalizeStationKey(query);
+  if (!q) return null;
+
+  const exactVoice = playlist.find(s => normalizeStationKey(s.voice_name) === q);
+  if (exactVoice) return exactVoice;
+
+  const exactName = playlist.find(s => normalizeStationKey(s.name) === q);
+  if (exactName) return exactName;
+
+  const fuzzyVoice = playlist.find(s => {
+    const alias = normalizeStationKey(s.voice_name);
+    return alias && (alias.startsWith(q) || q.startsWith(alias));
+  });
+  if (fuzzyVoice) return fuzzyVoice;
+
+  return playlist.find(s => normalizeStationKey(s.name).includes(q)) || null;
+}
+
+function handleVoiceDeepLink() {
+  const params = new URLSearchParams(window.location.search);
+  const query =
+    params.get("radio") ||
+    params.get("estacion") ||
+    params.get("station") ||
+    "";
+  if (!query.trim()) return false;
+
+  const station = findStationByVoiceName(query);
+  if (!station) {
+    showToast(`No encontré la emisora "${query}"`);
+    return true;
+  }
+
+  play(station.url, station.name, station.uuid);
+  showToast(`▶ ${station.name}`);
+  return true;
+}
+
+/* ── Comandos de voz (botón en la toolbar) ──
+   Usa Web Speech API cuando está disponible (Chrome/Android/PWA).
+   El alias del administrador (`voice_name`) permite distinguir emisoras
+   con nombres repetidos, ej: "reproduce infinita". */
+let voiceRecognition = null;
+let voiceListening = false;
+let voiceStarting = false;
+let voiceWasMutedForCommand = false;
+
+function getSpeechRecognitionCtor() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+
+function showVoiceListeningBadge(active) {
+  let badge = document.getElementById('voiceListeningBadge');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = 'voiceListeningBadge';
+    badge.className = 'voice-listening-badge';
+    badge.innerHTML = '<i class="fas fa-microphone"></i><span>Escuchando…</span>';
+    document.body.appendChild(badge);
+  }
+  badge.classList.toggle('show', !!active);
+  const btn = document.getElementById('btnVoiceCommand');
+  if (btn) btn.classList.toggle('listening', !!active);
+}
+
+function startVoiceRecognition() {
+  const SpeechRecognitionCtor = getSpeechRecognitionCtor();
+  if (!SpeechRecognitionCtor) {
+    showToast('Comandos de voz no disponibles en este navegador');
+    return;
+  }
+  if (voiceListening) {
+    try { voiceRecognition.stop(); } catch (_) {}
+    return;
+  }
+  // Evita arrancar dos sesiones cuando el mismo toque dispara keydown + click
+  // antes de que llegue onstart.
+  if (voiceStarting) return;
+  voiceStarting = true;
+
+  const recognition = new SpeechRecognitionCtor();
+  recognition.lang = 'es-CL';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    voiceStarting = false;
+    voiceListening = true;
+    showVoiceListeningBadge(true);
+    if (navigator.vibrate) navigator.vibrate(35);
+    // Silenciar momentáneamente la radio para que el micrófono no
+    // confunda la voz con la música/locución de la emisora.
+    if (player && !player.paused && !player.muted) {
+      player.muted = true;
+      voiceWasMutedForCommand = true;
+    }
+  };
+  recognition.onresult = (event) => {
+    const result = event.results?.[0]?.[0];
+    if (result && result.transcript) {
+      handleVoiceCommand(result.transcript);
+    }
+  };
+  recognition.onerror = (event) => {
+    console.warn('[VOICE] Error:', event.error);
+    if (event.error === 'not-allowed') {
+      showToast('Permite el micrófono para usar comandos de voz');
+    } else if (event.error !== 'aborted' && event.error !== 'no-speech') {
+      showToast('No pude escuchar el comando');
+    }
+  };
+  recognition.onend = () => {
+    voiceStarting = false;
+    voiceListening = false;
+    showVoiceListeningBadge(false);
+    if (voiceWasMutedForCommand && player) {
+      player.muted = false;
+      voiceWasMutedForCommand = false;
+    }
+  };
+
+  voiceRecognition = recognition;
+  try {
+    recognition.start();
+  } catch (err) {
+    voiceStarting = false;
+    voiceListening = false;
+    showVoiceListeningBadge(false);
+    console.warn('[VOICE] No se pudo iniciar:', err);
+    showToast('No se pudo activar el micrófono');
+  }
+}
+
+function handleVoiceCommand(rawText) {
+  const text = normalizeStationKey(rawText);
+  if (!text) return;
+
+  showToast(`🎙️ "${rawText.trim()}"`);
+
+  // Pausa / detener. "para" solo cuenta como comando cuando es la frase
+  // completa: como preposición ("pon la radio para dormir") NO debe pausar.
+  const isBareStop =
+    /^(para|para la (radio|musica|reproduccion|app))$/.test(text);
+  if (isBareStop || /(^|\s)(pausa|pausar|detente|deten|stop|silencio)(\s|$)/.test(text)) {
+    if (player) player.pause();
+    return;
+  }
+
+  // Reanudar
+  if (/(^|\s)(reanuda|reanudar|continua|continuar|play)(\s|$)/.test(text)) {
+    if (player) player.play();
+    return;
+  }
+
+  // Siguiente / anterior
+  if (/(^|\s)(siguiente|proxima|proximo|next)(\s|$)/.test(text)) {
+    playNext();
+    return;
+  }
+  if (/(^|\s)(anterior|previa|previo|atras)(\s|$)/.test(text)) {
+    playPrev();
+    return;
+  }
+
+  // Información de la canción actual
+  if (/(que esta sonando|que cancion|quien canta|info)/.test(text)) {
+    if (lastSongInfoTitle) {
+      fetchSongInfo(lastSongInfoTitle, { forceOpen: true });
+    } else {
+      showToast('No hay metadata de canción disponible');
+    }
+    return;
+  }
+
+  // Volumen
+  if (/(sube|aumenta|mas).*(volumen|vol)/.test(text)) {
+    if (player) player.volume = Math.min(1, (player.volume || 0) + 0.1);
+    showToast('🔊 Volumen +');
+    return;
+  }
+  if (/(baja|disminuye|menos).*(volumen|vol)/.test(text)) {
+    if (player) player.volume = Math.max(0, (player.volume || 0) - 0.1);
+    showToast('🔉 Volumen −');
+    return;
+  }
+
+  // Reproducir emisora por alias del admin o por nombre
+  const playPrefixes = ['reproduce', 'reproducir', 'toca', 'pon', 'poner', 'sintoniza', 'abre'];
+  let stationQuery = text;
+  for (const prefix of playPrefixes) {
+    if (text.startsWith(prefix + ' ')) {
+      stationQuery = text.slice(prefix.length).trim();
+      break;
+    }
+  }
+  stationQuery = stationQuery
+    .replace(/\b(en\s+)?(radios?|radio app|la app)\b/g, '')
+    .replace(/^(la\s+)?(radio|emisora|estacion|estación)\s+/i, '')
+    .replace(/^(el|la|los|las|un|una)\s+/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (stationQuery) {
+    const station = findStationByVoiceName(stationQuery);
+    if (station) {
+      play(station.url, station.name, station.uuid);
+      showToast(`▶ ${station.name}`);
+      return;
+    }
+  }
+
+  // "reproduce" / "pon la radio" sin emisora explícita → reanudar
+  if (playPrefixes.some(prefix => text === prefix || text === `${prefix} la radio`)) {
+    if (player) player.play();
+    return;
+  }
+
+  showToast('No entendí el comando');
+}
+
+function initVoiceCommand() {
+  const headerVoiceBtn = document.getElementById('btnVoiceCommand');
+  if (headerVoiceBtn) {
+    headerVoiceBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      startVoiceRecognition();
+    });
+    headerVoiceBtn.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        startVoiceRecognition();
+      }
+    });
+  }
+}
+
 /* ── Play Radio ── */
 function play(url, name, uuid) {
   const audio = document.getElementById('audioPlayer');
@@ -1404,6 +1851,9 @@ function play(url, name, uuid) {
   const sData = searchResults.find(s => s.url === url) || playlist.find(s => s.url === url);
   const favicon = sData ? sData.favicon || '' : '';
   currentPlayingStation = { url, name, uuid, favicon };
+  saveLastStation(currentPlayingStation);
+  // Evitar que el popup muestre metadata de la estación anterior.
+  lastSongInfoTitle = null;
   updateMediaSession(currentPlayingStation);
   setupMediaSessionActions();
   // Update player fav button state
@@ -1431,13 +1881,19 @@ function play(url, name, uuid) {
   const displayTime = document.getElementById('radioDisplayTime');
   if (displayTime) displayTime.textContent = '00:00';
 
-  // Only proxy HTTP streams (mixed content blocked by browser).
-  // HTTPS streams play directly; no se fuerza CORS.
+  // Los HTTP se proxifican por mixed content. Además, si Web Audio está
+  // activo (EQ/efectos), cualquier stream va por el proxy same-origin para
+  // que createMediaElementSource no lo silencie en Android/Chrome.
   const isHttp = url.startsWith('http://');
-  const finalUrl = isHttp ? getApiUrl(`/proxy?url=${encodeURIComponent(url)}`) : url;
-  console.log('[PLAY] finalUrl=%s proxied=%s', finalUrl, isHttp ? 'yes' : 'no');
+  const forceProxy = shouldProxyForWebAudio();
+  const useProxy = isHttp || forceProxy;
+  const finalUrl = useProxy ? getApiUrl(`/proxy?url=${encodeURIComponent(url)}`) : url;
+  console.log('[PLAY] finalUrl=%s proxied=%s fxProxy=%s', finalUrl, useProxy ? 'yes' : 'no', forceProxy ? 'yes' : 'no');
 
-  if (isHttp) {
+  if (useProxy) {
+    // Same-origin. No forzamos CORS.
+    audio.removeAttribute('crossOrigin');
+  } else if (isHttp) {
     audio.crossOrigin = 'anonymous';
   } else {
     audio.removeAttribute('crossOrigin');
@@ -1456,10 +1912,8 @@ function play(url, name, uuid) {
   }, { once: true });
 
   // Initialize/Resume Equalizer safely
-  try {
-    initEqualizer();
-  } catch (e) {
-    console.error('Equalizer error:', e);
+  if (typeof initEqualizer === 'function') {
+    initEqualizer().catch((e) => console.error('Equalizer error:', e));
   }
 
   // Reset duck gain if it was left ducked by news
@@ -1495,6 +1949,13 @@ function play(url, name, uuid) {
 }
 
 async function startMetadataTracker(uuid, stationUrl) {
+  // Idempotente: play() y el handler de "play" de Plyr pueden invocarlo para
+  // la misma estación (p.ej. cuando el navegador desbloquea el autoplay). Solo
+  // se arranca una vez por combinación uuid+url.
+  const trackerKey = `${uuid || ''}|${stationUrl || ''}`;
+  if (metadataTrackerKey === trackerKey) return;
+  metadataTrackerKey = trackerKey;
+
   const display = document.getElementById('radioDisplay');
   const kbpsDisplay = document.getElementById('plCount');
   const trackEl = document.getElementById('nowPlayingTrack');
@@ -1719,16 +2180,33 @@ async function syncCuratedFromServer() {
     if (res.ok) {
       const serverList = await res.json();
       if (Array.isArray(serverList) && serverList.length > 0) {
-        const localUuids = new Set(playlist.map(s => s.uuid));
-        let added = 0;
+        const serverByUuid = new Map();
         serverList.forEach(s => {
-          if (s.uuid && !localUuids.has(s.uuid) && !s.is_sponsored) {
+          if (s.uuid) serverByUuid.set(s.uuid, s);
+        });
+
+        let added = 0;
+        let updated = 0;
+        // Actualizar metadata de curadas ya guardadas en localStorage.
+        // Esto permite que el alias de voz/deeplink definido en admin llegue
+        // a las instalaciones existentes sin tener que reinstalar la app.
+        playlist = playlist.map(local => {
+          const remote = serverByUuid.get(local.uuid);
+          if (!remote || remote.is_sponsored) return local;
+          const merged = { ...local, ...remote };
+          if (JSON.stringify(merged) !== JSON.stringify(local)) updated++;
+          return merged;
+        });
+
+        // Agregar las curadas nuevas que aún no estén en la playlist local.
+        serverList.forEach(s => {
+          if (s.uuid && !s.is_sponsored && !playlist.some(p => p.uuid === s.uuid)) {
             playlist.push(s);
-            localUuids.add(s.uuid);
             added++;
           }
         });
-        if (added > 0 || playlist.length > 0) {
+
+        if (added > 0 || updated > 0 || playlist.length > 0) {
           // Ordenar respetando la posición curatorial asignada en el servidor/admin
           playlist.sort((a, b) => {
             const posA = typeof a.position === 'number' ? a.position : 9999;
@@ -2119,12 +2597,152 @@ async function hardRefresh() {
       }
     }
 
-    // 3. Reload Page (Hard)
+    // 3. Marcar que al volver a cargar se muestren novedades/tutorial una vez.
+    try {
+      localStorage.setItem('radios_pending_changelog', 'next');
+    } catch (_) {}
+
+    // 4. Reload Page (Hard)
     window.location.reload(true);
   } catch (e) {
     console.error('Refresh error:', e);
     window.location.reload();
   }
+}
+
+/* ── Modal de Novedades + Tutorial ── */
+let changelogState = { step: 'news', tutorialIndex: 0 };
+
+function getChangelogData() {
+  const current = WHATS_NEW[APP_VERSION];
+  if (current) return current;
+  return {
+    items: [
+      { icon: 'fa-microphone', text: 'Botón de comandos de voz dedicado en la barra superior.' },
+      { icon: 'fa-hand-pointer', text: 'Apertura táctil limpia en la tarjeta "Está Sonando".' },
+      { icon: 'fa-clock', text: 'Modal con auto-apertura y cierre tras 1 minuto.' },
+    ],
+    tutorial: [
+      { icon: 'fa-microphone', title: 'Comandos de voz', text: 'Toca el ícono de micrófono al inicio de la barra superior.' },
+      { icon: 'fa-compact-disc', title: 'Está Sonando', text: 'Toca la tarjeta para ver información detallada de la canción.' },
+    ],
+  };
+}
+
+function renderChangelogModal() {
+  const body = document.getElementById('changelogBody');
+  const title = document.getElementById('changelogTitle');
+  const progress = document.getElementById('changelogProgress');
+  const prevBtn = document.getElementById('changelogPrevBtn');
+  const nextBtn = document.getElementById('changelogNextBtn');
+  if (!body || !title || !progress || !prevBtn || !nextBtn) return;
+
+  const data = getChangelogData();
+  const totalDots = 1 + data.tutorial.length;
+
+  if (changelogState.step === 'news') {
+    title.textContent = `Novedades v${APP_VERSION}`;
+    const items = data.items.map(item => `
+      <div class="changelog-item">
+        <span class="changelog-item-icon"><i class="fas ${escHtml(item.icon)}"></i></span>
+        <span class="changelog-item-text">${escHtml(item.text)}</span>
+      </div>`).join('');
+    body.innerHTML = `
+      <p class="changelog-section-title">Lo nuevo</p>
+      <div class="changelog-list">${items}</div>`;
+    prevBtn.classList.add('hidden');
+    nextBtn.textContent = 'Ver tutorial';
+  } else {
+    const index = Math.max(0, Math.min(changelogState.tutorialIndex, data.tutorial.length - 1));
+    const slide = data.tutorial[index] || data.tutorial[0];
+    title.textContent = 'Tutorial rápido';
+    body.innerHTML = `
+      <div class="changelog-tutorial-card">
+        <div class="changelog-tutorial-icon"><i class="fas ${escHtml(slide.icon)}"></i></div>
+        <div class="changelog-tutorial-step">Paso ${index + 1} de ${data.tutorial.length}</div>
+        <div class="changelog-tutorial-title">${escHtml(slide.title)}</div>
+        <div class="changelog-tutorial-text">${escHtml(slide.text)}</div>
+      </div>`;
+    prevBtn.classList.remove('hidden');
+    prevBtn.textContent = index === 0 ? 'Novedades' : 'Anterior';
+    nextBtn.textContent = index === data.tutorial.length - 1 ? 'Entendido' : 'Siguiente';
+  }
+
+  const activeDot = changelogState.step === 'news' ? 0 : 1 + changelogState.tutorialIndex;
+  progress.innerHTML = Array.from({ length: totalDots }, (_, i) =>
+    `<span class="changelog-progress-dot${i === activeDot ? ' active' : ''}"></span>`
+  ).join('');
+}
+
+function showChangelogModal() {
+  const overlay = document.getElementById('changelogOverlay');
+  if (!overlay) return;
+  changelogState = { step: 'news', tutorialIndex: 0 };
+  renderChangelogModal();
+  overlay.classList.remove('hidden');
+  const closeBtn = document.getElementById('changelogCloseBtn');
+  if (closeBtn) closeBtn.focus({ preventScroll: true });
+}
+
+function closeChangelogModal() {
+  const overlay = document.getElementById('changelogOverlay');
+  if (overlay) overlay.classList.add('hidden');
+  try {
+    localStorage.setItem('radios_changelog_seen', APP_VERSION);
+    localStorage.removeItem('radios_pending_changelog');
+  } catch (_) {}
+}
+
+function checkChangelogOnBoot() {
+  try {
+    const seen = localStorage.getItem('radios_changelog_seen');
+    const pending = localStorage.getItem('radios_pending_changelog');
+    // Se muestra si cambió la versión o si hardRefresh() lo pidió explícitamente.
+    if (seen === APP_VERSION && !pending) return;
+    setTimeout(showChangelogModal, 700);
+  } catch (_) {}
+}
+
+function initChangelogModal() {
+  const overlay = document.getElementById('changelogOverlay');
+  const closeBtn = document.getElementById('changelogCloseBtn');
+  const prevBtn = document.getElementById('changelogPrevBtn');
+  const nextBtn = document.getElementById('changelogNextBtn');
+  if (!overlay || !closeBtn || !prevBtn || !nextBtn) return;
+
+  const data = getChangelogData();
+
+  closeBtn.addEventListener('click', closeChangelogModal);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeChangelogModal();
+  });
+  prevBtn.addEventListener('click', () => {
+    if (changelogState.step === 'tutorial' && changelogState.tutorialIndex > 0) {
+      changelogState.tutorialIndex--;
+    } else {
+      changelogState.step = 'news';
+    }
+    renderChangelogModal();
+  });
+  nextBtn.addEventListener('click', () => {
+    if (changelogState.step === 'news') {
+      changelogState.step = 'tutorial';
+      changelogState.tutorialIndex = 0;
+      renderChangelogModal();
+      return;
+    }
+    if (changelogState.tutorialIndex < data.tutorial.length - 1) {
+      changelogState.tutorialIndex++;
+      renderChangelogModal();
+    } else {
+      closeChangelogModal();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !overlay.classList.contains('hidden')) {
+      closeChangelogModal();
+    }
+  });
 }
 
 function exportM3U() {
@@ -2878,16 +3496,173 @@ function isGenericOrArtifactTitle(title) {
 }
 
 /* ── Song Info Popup ── */
-async function fetchSongInfo(title) {
-  if (!title || isGenericOrArtifactTitle(title)) return;
+function buildFallbackSongData(title) {
+  return {
+    raw_title: title || 'Sin información',
+    artist: currentPlayingStation?.name || '',
+    track: title || 'Señal en vivo',
+    album: null,
+    genre: null,
+    year: null,
+    source: null,
+    writer: null,
+    producer: null,
+    label: null,
+    length: null,
+    description: 'No hay metadata adicional disponible para esta reproducción.',
+    thumbnail: null,
+    wiki_url: null,
+    release_id: null,
+    album_tracks: [],
+    fallback: true,
+  };
+}
+
+async function fetchSongInfo(title, options = {}) {
+  const forceOpen = !!options.forceOpen;
+  if (!title) {
+    if (forceOpen) showToast('No hay información de canción disponible');
+    return;
+  }
+  if (isGenericOrArtifactTitle(title) && !forceOpen) return;
+
   lastSongInfoTitle = title;
+
+  // En aperturas manuales mostramos de inmediato un modal básico; cuando
+  // llegue la metadata enriquecida, se reemplaza suavemente.
+  if (forceOpen) showSongPopup(buildFallbackSongData(title));
+
   try {
     const res = await fetch(getApiUrl(`/api/songinfo?title=${encodeURIComponent(title)}`));
     if (!res.ok) return;
     const data = await res.json();
-    if (!data || data.error || (!data.artist && !data.genre && !data.album && !data.track)) return;
+    const hasData = data && !data.error &&
+      (data.artist || data.genre || data.album || data.track);
+    if (!hasData) return;
     showSongPopup(data);
-  } catch {}
+  } catch (_) {}
+}
+
+/* ── Popup extensible: registro de secciones dinámicas ──
+   Cada renderer recibe los metadatos de la canción y devuelve un nodo DOM
+   (o null si no corresponde mostrarlo). Para agregar una sección nueva basta
+   con registrarla aquí; no hace falta editar el HTML del popup. */
+const songPopupSectionRenderers = [];
+
+function registerSongPopupSection(id, renderer) {
+  if (typeof renderer !== 'function') return;
+  songPopupSectionRenderers.push({ id, renderer });
+}
+
+function renderSongPopupSections(data) {
+  const mount = document.getElementById('popupDynamicSections');
+  if (!mount) return;
+  mount.innerHTML = '';
+  songPopupSectionRenderers.forEach(({ id, renderer }) => {
+    try {
+      const node = renderer(data);
+      if (node) mount.appendChild(node);
+    } catch (err) {
+      console.warn(`[SONG POPUP] No se pudo renderizar la sección "${id}":`, err);
+    }
+  });
+  mount.classList.toggle('hidden', mount.children.length === 0);
+}
+
+/* ── Sección: listado de temas del álbum ── */
+function renderSongPopupAlbumSection(data) {
+  if (!getInfoSetting('albumTracks')) return null;
+  const tracks = Array.isArray(data.album_tracks) ? data.album_tracks : [];
+  if (!data.album || !tracks.length) return null;
+
+  const currentTitle = String(data.track || data.raw_title || '').trim().toLowerCase();
+  const rows = tracks.map((track) => {
+    const title = String(track.title || '').trim();
+    const isCurrent = currentTitle && title.toLowerCase() === currentTitle;
+    const disc = Number(track.disc) > 1 ? `${track.disc}-` : '';
+    const position = track.position !== undefined && track.position !== null && track.position !== ''
+      ? `${disc}${track.position}`
+      : '';
+    const duration = track.length
+      ? `<span class="sp-album-track-length">${escHtml(track.length)}</span>`
+      : '';
+    return `
+      <li class="sp-album-track${isCurrent ? ' is-current' : ''}"${isCurrent ? ' aria-current="true"' : ''}>
+        <span class="sp-album-track-num">${escHtml(position)}</span>
+        <span class="sp-album-track-title">${escHtml(title)}</span>
+        ${duration}
+      </li>`;
+  }).join('');
+
+  const wrap = document.createElement('div');
+  wrap.className = 'song-popup-album song-popup-section';
+  wrap.innerHTML = `
+    <button class="song-popup-section-toggle expanded" type="button" aria-expanded="true">
+      <span class="song-popup-section-toggle-left">
+        <i class="fas fa-list-ul"></i>
+        <span class="sp-album-name">${escHtml(data.album)}</span>
+        <span class="sp-album-count">${tracks.length} ${tracks.length === 1 ? 'tema' : 'temas'}</span>
+      </span>
+      <i class="fas fa-chevron-down song-popup-toggle-chevron"></i>
+    </button>
+    <div class="song-popup-section-body">
+      <ol class="sp-album-list">${rows}</ol>
+    </div>
+  `;
+
+  const toggle = wrap.querySelector('.song-popup-section-toggle');
+  const body = wrap.querySelector('.song-popup-section-body');
+  if (toggle && body) {
+    toggle.addEventListener('click', () => {
+      const collapsed = body.classList.toggle('hidden');
+      toggle.classList.toggle('expanded', !collapsed);
+      toggle.setAttribute('aria-expanded', String(!collapsed));
+      if (collapsed) {
+        restartSongPopupAutoClose();
+      } else {
+        // Mantener abierto mientras se lee el listado de temas.
+        clearTimeout(songPopupTimer);
+      }
+    });
+  }
+  return wrap;
+}
+
+registerSongPopupSection('album', renderSongPopupAlbumSection);
+
+/* ── Lightbox de portada: se abre dentro del tamaño del modal ── */
+function openCoverLightbox(src, alt) {
+  clearTimeout(songPopupTimer);
+  const box = document.getElementById('popupCoverLightbox');
+  const img = document.getElementById('popupCoverLarge');
+  if (!box || !img || !src) return;
+  img.src = src;
+  img.alt = alt ? `Portada de ${alt}` : 'Portada ampliada';
+  box.classList.remove('hidden');
+  box.setAttribute('aria-hidden', 'false');
+}
+
+function closeCoverLightbox() {
+  const box = document.getElementById('popupCoverLightbox');
+  const img = document.getElementById('popupCoverLarge');
+  if (!box) return;
+  box.classList.add('hidden');
+  box.setAttribute('aria-hidden', 'true');
+  if (img) img.removeAttribute('src');
+  // Al cerrar la portada ampliada se reanuda el autocierre del popup.
+  restartSongPopupAutoClose();
+}
+
+/* ── Autocierre del popup de canción ──
+   Interactuar con el popup (ampliar portada, desplegar album/letra, votar)
+   pausa el cierre de 60 s. Esta función lo reprograma para que el modal nunca
+   quede abierto indefinidamente ni desaparezca a mitad de una interacción. */
+const SONG_POPUP_AUTOCLOSE_MS = 60000;
+function restartSongPopupAutoClose() {
+  clearTimeout(songPopupTimer);
+  const overlay = document.getElementById('songPopupOverlay');
+  if (!overlay || overlay.classList.contains('hidden')) return;
+  songPopupTimer = setTimeout(() => hideSongPopup(), SONG_POPUP_AUTOCLOSE_MS);
 }
 
 function showSongPopup(data) {
@@ -2918,6 +3693,7 @@ function showSongPopup(data) {
   const showCover = getInfoSetting('cover');
   const radioFavicon = currentPlayingStation?.favicon || '';
   const imgSrc = data.thumbnail || radioFavicon;
+  closeCoverLightbox();
   if (showCover && imgSrc) {
     coverImg.src = imgSrc;
     coverImg.classList.toggle('is-favicon-fallback', !data.thumbnail && !!radioFavicon);
@@ -2926,13 +3702,26 @@ function showSongPopup(data) {
       if (data.thumbnail && radioFavicon && coverImg.src !== radioFavicon) {
         coverImg.src = radioFavicon;
         coverImg.classList.add('is-favicon-fallback');
+        coverWrap.classList.remove('is-zoomable');
+        coverWrap.onclick = null;
       } else {
         coverWrap.classList.add('hidden');
       }
     };
+    const canZoomCover = !!data.thumbnail;
+    coverWrap.classList.toggle('is-zoomable', canZoomCover);
+    coverWrap.title = canZoomCover ? 'Ampliar portada' : 'Portada';
+    coverWrap.onclick = canZoomCover
+      ? (event) => {
+          event.stopPropagation();
+          openCoverLightbox(data.thumbnail, artist || track || 'Portada');
+        }
+      : null;
     coverWrap.classList.remove('hidden');
   } else {
     coverWrap.classList.add('hidden');
+    coverWrap.classList.remove('is-zoomable');
+    coverWrap.onclick = null;
   }
 
   /* ── Description (settings-aware) ── */
@@ -2978,6 +3767,9 @@ function showSongPopup(data) {
   } else {
     extrasEl.classList.add('hidden');
   }
+
+  /* ── Secciones extensibles (álbum, etc.) ── */
+  renderSongPopupSections(data);
 
   /* ── Wikipedia link (settings-aware) ── */
   const showWikiLink = getInfoSetting('wikiLink');
@@ -3031,9 +3823,7 @@ function showSongPopup(data) {
 
   overlay.classList.remove('hidden');
 
-  songPopupTimer = setTimeout(() => {
-    hideSongPopup();
-  }, 30000);
+  restartSongPopupAutoClose();
 }
 
 /* ── Guardar en historial de localStorage a petición del usuario (hora, título, artista) ── */
@@ -3197,6 +3987,7 @@ function initInfoPanel() {
     'infoMetaToggle': 'meta',
     'infoWikiLinkToggle': 'wikiLink',
     'infoLyricsToggle': 'lyrics',
+    'infoAlbumTracksToggle': 'albumTracks',
   };
 
   for (const [id, key] of Object.entries(toggles)) {
@@ -3274,6 +4065,7 @@ function hideSongPopup() {
   if (overlay) overlay.classList.add('hidden');
   const popup = document.getElementById('songPopup');
   if (popup) popup.classList.remove('lyrics-fullscreen');
+  closeCoverLightbox();
   clearTimeout(songPopupTimer);
   clearTimeout(songPopupDismissTimer);
 }
@@ -3285,6 +4077,33 @@ function initSongPopupDismiss() {
   const overlay = document.getElementById('songPopupOverlay');
   if (overlay) overlay.addEventListener('click', (e) => {
     if (e.target === overlay) hideSongPopup();
+  });
+
+  const coverLightbox = document.getElementById('popupCoverLightbox');
+  const coverLightboxClose = document.getElementById('popupCoverLightboxClose');
+  if (coverLightboxClose) coverLightboxClose.addEventListener('click', closeCoverLightbox);
+  if (coverLightbox) {
+    coverLightbox.addEventListener('click', (e) => {
+      if (e.target === coverLightbox) closeCoverLightbox();
+    });
+  }
+
+  // Interactuar con el contenido del popup reinicia la cuenta de autocierre
+  // (votar, guardar, agregar a playlist) en vez de dejar que desaparezca.
+  const popupBody = document.getElementById('songPopupBody');
+  if (popupBody) {
+    popupBody.addEventListener('click', () => restartSongPopupAutoClose());
+  }
+
+  // Escape cierra primero la portada ampliada y luego el popup.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (coverLightbox && !coverLightbox.classList.contains('hidden')) {
+      closeCoverLightbox();
+      return;
+    }
+    const songPopup = document.getElementById('songPopupOverlay');
+    if (songPopup && !songPopup.classList.contains('hidden')) hideSongPopup();
   });
 }
 
@@ -3301,7 +4120,7 @@ function setupLyricsSection(data) {
 
   const showLyrics = getInfoSetting('lyrics');
   // Only makes sense when we have an artist + track parsed
-  if (!showLyrics || !data.artist || !data.track) {
+  if (!showLyrics || data.fallback || !data.artist || !data.track) {
     wrap.classList.add('hidden');
     return;
   }
@@ -3328,6 +4147,7 @@ function setupLyricsSection(data) {
       body.classList.add('hidden');
       toggle.classList.remove('expanded');
       if (popup) popup.classList.remove('lyrics-fullscreen');
+      restartSongPopupAutoClose();
       return;
     }
     // expand
@@ -3664,6 +4484,8 @@ document.addEventListener('DOMContentLoaded', () => {
   init();
   initSongPopupDismiss();
   initPinchToZoom();
+  initVoiceCommand();
+  initChangelogModal();
 
   // Click on now-playing minicard (#htmxNowPlaying) or track element to open song popup modal
   const popupTriggers = [
@@ -3673,23 +4495,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   popupTriggers.forEach(el => {
     if (!el) return;
-    let _pDown = false;
-    el.addEventListener('pointerdown', () => {
-      _pDown = true;
-    });
-    el.addEventListener('pointerup', (e) => {
-      if (_pDown) {
-        if (lastSongInfoTitle && !isGenericOrArtifactTitle(lastSongInfoTitle)) {
-          fetchSongInfo(lastSongInfoTitle);
-        } else {
-          const titleEl = el.querySelector('.htmx-np-title');
-          if (titleEl && titleEl.textContent && !isGenericOrArtifactTitle(titleEl.textContent)) {
-            fetchSongInfo(titleEl.textContent.trim());
-          }
-        }
+    el.addEventListener('click', () => {
+      const titleEl = el.querySelector('.htmx-np-title') || el.querySelector('#nowPlayingTrackText');
+      let title = titleEl?.textContent?.trim() || '';
+      if (!title || isGenericOrArtifactTitle(title)) {
+        title = (lastSongInfoTitle || '').trim() ||
+          (currentPlayingStation?.name || '').trim();
       }
-      _pDown = false;
+      if (title) {
+        fetchSongInfo(title, { forceOpen: true });
+      } else {
+        showToast('No hay información de canción disponible');
+      }
     });
-    el.addEventListener('pointercancel', () => { _pDown = false; });
   });
 });
