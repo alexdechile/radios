@@ -1,4 +1,6 @@
-scrapling==0.4.8
+# El extra [fetchers] es obligatorio: sin él no se instala curl_cffi y
+# `from scrapling.fetchers import Fetcher` falla al arrancar el servidor.
+scrapling[fetchers]==0.4.8
 edge-tts==7.2.8
 beautifulsoup4==4.14.3
 markdownify==1.2.2

@@ -52,10 +52,23 @@ def basic_auth_header(user: str, password: str) -> dict[str, str]:
     return {"Authorization": "Basic " + base64.b64encode(raw).decode("ascii")}
 
 
-def wait_for_server(base: str, timeout: float = 15.0) -> None:
+def wait_for_server(base: str, proc: subprocess.Popen | None = None, timeout: float = 30.0) -> None:
     deadline = time.time() + timeout
     last_error = None
     while time.time() < deadline:
+        # Si el proceso murió (p.ej. un import que falta), reportar su stderr
+        # en vez de esperar el timeout completo sin pistas.
+        if proc is not None and proc.poll() is not None:
+            stderr = ""
+            try:
+                if proc.stderr is not None:
+                    stderr = (proc.stderr.read() or "").strip()
+            except Exception:
+                pass
+            raise RuntimeError(
+                f"El servidor terminó con código {proc.returncode} antes de responder. "
+                f"stderr:\n{stderr}"
+            )
         try:
             status, _ = get(base + "/api/version")
             if status == 200:
@@ -63,7 +76,7 @@ def wait_for_server(base: str, timeout: float = 15.0) -> None:
         except Exception as exc:  # pragma: no cover - diagnóstico
             last_error = exc
         time.sleep(0.2)
-    raise RuntimeError(f"El servidor no arrancó: {last_error}")
+    raise RuntimeError(f"El servidor no arrancó en {timeout:.0f}s: {last_error}")
 
 
 def expect(condition: bool, message: str) -> None:
@@ -91,7 +104,7 @@ def start_server(
         stderr=subprocess.PIPE,
         text=True,
     )
-    wait_for_server(base)
+    wait_for_server(base, proc)
     return proc, base, rate_db
 
 
