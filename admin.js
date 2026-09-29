@@ -170,6 +170,7 @@
         filtered = stations.filter(
           (s) =>
             (s.name || "").toLowerCase().includes(q) ||
+            (s.voice_name || "").toLowerCase().includes(q) ||
             (s.country || "").toLowerCase().includes(q) ||
             (s.tags || "").toLowerCase().includes(q) ||
             (s.editorial_notes || "").toLowerCase().includes(q)
@@ -206,6 +207,9 @@
         const editorial = s.editorial_notes
           ? `<div class="station-editorial">"${esc(s.editorial_notes)}"</div>`
           : "";
+        const voiceAlias = s.voice_name
+          ? `<div class="station-voice-alias"><i class="fas fa-microphone-lines"></i> ${esc(s.voice_name)}</div>`
+          : "";
 
         const playing = previewUuid === s.uuid ? "playing" : "";
         const playIcon = previewUuid === s.uuid ? "fa-stop" : "fa-play";
@@ -228,6 +232,7 @@
             </div>
           </div>
           <div class="station-tags">${featuredTag}${tags}</div>
+          ${voiceAlias}
           ${editorial}
           <div class="station-actions">
             <button class="btn-action ${playing}" data-action="preview" data-uuid="${esc(s.uuid)}" data-url="${esc(s.url)}" data-name="${esc(s.name)}">
@@ -395,6 +400,7 @@
     $("#modalTitle").textContent = "Editar Estación";
     $("#editUuid").value = s.uuid;
     $("#editName").value = s.name || "";
+    $("#editVoiceName").value = s.voice_name || "";
     $("#editUrl").value = s.url || "";
     $("#editCountry").value = s.country || "";
     $("#editTags").value = s.tags || "";
@@ -423,6 +429,7 @@
     const stUuid = data.uuid || data.stationuuid || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : "gen-" + Date.now());
     $("#editUuid").value = stUuid;
     $("#editName").value = data.name || "";
+    $("#editVoiceName").value = data.voice_name || "";
     $("#editUrl").value = data.url_resolved || data.url || "";
     $("#editCountry").value = data.country || "";
     $("#editTags").value = data.tags || "";
@@ -450,6 +457,7 @@
     const payload = {
       uuid,
       name: $("#editName").value,
+      voice_name: $("#editVoiceName").value.trim(),
       url: $("#editUrl").value,
       country: $("#editCountry").value,
       tags: $("#editTags").value,

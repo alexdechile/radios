@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import sys
 
+import difflib
 import json
 import sqlite3
 import re
+import unicodedata
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta
@@ -13,6 +15,10 @@ from datetime import datetime, timedelta
 from scrapling.fetchers import Fetcher
 
 from radios_app.storage import open_db
+
+# Versión del algoritmo de metadata. Al aumentarla, las entradas viejas de
+# song_cache se consideran obsoletas y se vuelven a consultar.
+SONGINFO_CACHE_VERSION = 3
 
 
 class MediaInfoMixin:
@@ -42,10 +48,25 @@ class MediaInfoMixin:
                         age = datetime.now() - fetched_dt
                         # Use cache if fresh (7 days), UNLESS thumbnail is missing and entry is old (>1 day)
                         has_thumbnail = bool(row_dict.get("thumbnail"))
-                        if age < timedelta(days=7) and (
-                            has_thumbnail or age < timedelta(days=1)
+                        try:
+                            cache_meta_version = int(row_dict.get("meta_version") or 1)
+                        except Exception:
+                            cache_meta_version = 1
+                        if (
+                            age < timedelta(days=7)
+                            and (has_thumbnail or age < timedelta(days=1))
+                            and cache_meta_version >= SONGINFO_CACHE_VERSION
                         ):
                             row_dict["cached"] = True
+                            # album_tracks se guarda como JSON en SQLite; exponerlo como lista.
+                            raw_tracks = row_dict.get("album_tracks")
+                            if raw_tracks:
+                                try:
+                                    row_dict["album_tracks"] = json.loads(raw_tracks)
+                                except Exception:
+                                    row_dict["album_tracks"] = []
+                            else:
+                                row_dict["album_tracks"] = []
                             conn.close()
                             self.send_json(row_dict)
                             return
@@ -61,9 +82,9 @@ class MediaInfoMixin:
                 c.execute(
                     """
                     INSERT OR REPLACE INTO song_cache (raw_title, artist, track, album, genre, year, source,
-                        writer, producer, label, length, description, thumbnail, wiki_url)
+                        writer, producer, label, length, description, thumbnail, wiki_url, release_id, album_tracks, meta_version)
                     VALUES (?, ?, ?, ?, ?, ?, ?,
-                        ?, ?, ?, ?, ?, ?, ?)
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
                         raw_title,
@@ -80,6 +101,9 @@ class MediaInfoMixin:
                         result.get("description"),
                         result.get("thumbnail"),
                         result.get("wiki_url"),
+                        result.get("release_id"),
+                        json.dumps(result.get("album_tracks") or []),
+                        SONGINFO_CACHE_VERSION,
                     ),
                 )
                 conn.commit()
@@ -104,6 +128,8 @@ class MediaInfoMixin:
                     "description": None,
                     "thumbnail": None,
                     "wiki_url": None,
+                    "release_id": None,
+                    "album_tracks": [],
                     "cached": False,
                     "error": str(e),
                 }
@@ -494,12 +520,22 @@ class MediaInfoMixin:
 
                         has_artist_match = any(w in snippet_lower or w in page_title_lower for w in artist_words) if artist_words else (artist_lower in snippet_lower)
 
+                        # Siempre exigimos relación con el artista para evitar
+                        # biografías o canciones homónimas de otro intérprete.
+                        if not has_artist_match:
+                            continue
+
                         # For short titles like "Don" or "It", we MUST have an artist match AND music term
                         if is_short_title:
-                            if not (has_artist_match and any(m in snippet_lower or m in page_title_lower for m in ("song", "canción", "single"))):
+                            if not any(m in snippet_lower or m in page_title_lower for m in ("song", "canción", "single")):
                                 continue
                         else:
-                            if not (has_artist_match or (song_lower in page_title_lower and any(m in snippet_lower for m in ("song", "canción", "single", "album", "álbum")))):
+                            music_terms = ("song", "canción", "single", "album", "álbum", "banda", "band")
+                            if not (
+                                song_lower in page_title_lower
+                                or song_lower in snippet_lower
+                                or any(m in snippet_lower or m in page_title_lower for m in music_terms)
+                            ):
                                 continue
 
                         summary = self._fetch_wikipedia_summary(
@@ -597,21 +633,238 @@ class MediaInfoMixin:
                 continue
         return None
 
+    @staticmethod
+    def _format_duration(ms):
+        """Convierte milisegundos de MusicBrainz a mm:ss."""
+        if not ms:
+            return ""
+        try:
+            total_seconds = int(ms) // 1000
+            return f"{total_seconds // 60}:{total_seconds % 60:02d}"
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _release_quality_score(release):
+        """Puntúa qué tan canónico es un release (álbum de estudio oficial).
+
+        Penaliza fuertemente bootlegs y ediciones en vivo: MusicBrainz suele
+        devolverlas primero para grabaciones muy versionadas, y elegirlas
+        produce álbumes, sellos y tracklists equivocados.
+        """
+        rg = release.get("release-group") or {}
+        primary = (rg.get("primary-type") or "").lower()
+        secondary = [t.lower() for t in (rg.get("secondary-types") or [])]
+        status = (release.get("status") or "").lower()
+        disambiguation = (release.get("disambiguation") or "").lower()
+        title = (release.get("title") or "").lower()
+        total = 0
+        if primary == "album":
+            total += 30
+        elif primary == "single":
+            total += 20
+        elif primary == "ep":
+            total += 15
+        if "compilation" in secondary:
+            total -= 25
+        if "live" in secondary:
+            total -= 15
+        if "soundtrack" in secondary:
+            total -= 10
+        if "interview" in secondary or "spokenword" in secondary:
+            total -= 40
+        if "demo" in secondary:
+            total -= 20
+        if status == "official":
+            total += 10
+        elif status == "bootleg":
+            total -= 60
+        # Ediciones derivadas (5.1, remixes, instrumentales, karaoke) no
+        # representan el álbum original ni su tracklist.
+        for marker in (
+            "mix", "remix", "instrumental", "karaoke", "commentary",
+            "interview", "a cappella", "acapella", "demo", "tribute",
+        ):
+            if marker in disambiguation:
+                total -= 25
+                break
+        if "interview" in title or "commentary" in title:
+            total -= 20
+        if release.get("date"):
+            total += 2
+        track_count = release.get("track-count") or 0
+        if 5 <= track_count <= 30:
+            total += 5
+        elif track_count > 60:
+            total -= 5
+        return total
+
+    @classmethod
+    def _sort_releases_by_relevance(cls, releases):
+        """Ordena releases de MusicBrainz priorizando álbumes/singles oficiales.
+
+        El primer release de una grabación suele ser una compilación oscura o
+        una edición rara. A igual calidad se prefiere la edición más antigua
+        (la original) y se dejan al final las que no tienen fecha.
+        """
+        if not releases:
+            return []
+
+        def date_key(release):
+            year = (release.get("date") or "")[:4]
+            try:
+                return int(year)
+            except ValueError:
+                return 9999  # sin fecha conocida, al final
+
+        return sorted(
+            releases,
+            key=lambda r: (cls._release_quality_score(r), -date_key(r)),
+            reverse=True,
+        )
+
+    def _fetch_release_tracks(self, release_id, limit=60):
+        """Obtiene el listado de temas de un release de MusicBrainz.
+
+        Es una llamada adicional bajo demanda, con timeout corto y tolerante a
+        fallos: si MusicBrainz no responde, el modal simplemente omite la
+        sección de álbum.
+        """
+        if not release_id:
+            return []
+        try:
+            url = (
+                f"https://musicbrainz.org/ws/2/release/{release_id}"
+                "?fmt=json&inc=recordings"
+            )
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "RadiosApp/1.0 (radios-sketch@donalex)"},
+            )
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+
+            tracks = []
+            for medium in data.get("media", []):
+                disc = medium.get("position") or 1
+                for track in medium.get("tracks", []):
+                    title = (track.get("title") or "").strip()
+                    if not title:
+                        continue
+                    tracks.append(
+                        {
+                            "disc": disc,
+                            "position": track.get("number")
+                            or track.get("position")
+                            or "",
+                            "title": title,
+                            "length": self._format_duration(track.get("length")),
+                        }
+                    )
+                    if len(tracks) >= limit:
+                        return tracks
+            return tracks
+        except Exception as e:
+            print(
+                f"[SONGINFO] MusicBrainz release tracks error: {e}",
+                file=sys.stderr,
+            )
+            return []
+
+    @staticmethod
+    def _normalize_match_text(text):
+        """Normaliza texto para comparar artista/título sin acentos ni signos."""
+        if not text:
+            return ""
+        value = unicodedata.normalize("NFKD", str(text))
+        value = "".join(ch for ch in value if not unicodedata.combining(ch))
+        return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+
+    def _recording_artist_name(self, rec):
+        parts = []
+        for credit in rec.get("artist-credit") or []:
+            if isinstance(credit, dict):
+                name = credit.get("name") or (credit.get("artist") or {}).get("name")
+                if name:
+                    parts.append(name)
+            elif isinstance(credit, str):
+                parts.append(credit)
+        return " ".join(parts).strip()
+
+    def _recording_match_score(self, rec, artist, track):
+        """Puntúa por separado el artista y el título de una grabación (0-100).
+
+        Se separan a propósito: un título exacto NO debe bastar si el artista
+        no calza, porque eso aceptaba covers y actos de nombre parecido
+        (p.ej. "Kiss" contra "Kissin' Dynamite" o "The Killers" contra
+        "The Kills"). El llamador exige un mínimo en cada subscore.
+        """
+        input_artist = self._normalize_match_text(artist)
+        input_track = self._normalize_match_text(track)
+        cand_artist = self._normalize_match_text(self._recording_artist_name(rec))
+        cand_track = self._normalize_match_text(rec.get("title") or "")
+
+        # ── Artista ──
+        artist_score = 0
+        if input_artist and cand_artist:
+            if input_artist == cand_artist:
+                artist_score = 100
+            else:
+                input_tokens = set(input_artist.split())
+                cand_tokens = set(cand_artist.split())
+                overlap = len(input_tokens & cand_tokens) / max(1, len(input_tokens))
+                if input_tokens and input_tokens <= cand_tokens:
+                    # Todas las palabras del artista están presentes
+                    # (ej. "Los Prisioneros" vs "Los Prisioneros feat. X").
+                    artist_score = 80
+                elif (
+                    input_artist in cand_artist or cand_artist in input_artist
+                ) and overlap >= 0.5:
+                    # La subcadena solo cuenta con solapamiento real de
+                    # palabras: evita que "kiss" calce con "kissin dynamite".
+                    artist_score = 60
+                artist_score = max(artist_score, int(overlap * 90))
+
+        # ── Título ──
+        track_score = 0
+        if input_track and cand_track:
+            if input_track == cand_track:
+                track_score = 100
+            elif input_track in cand_track or cand_track in input_track:
+                # Caso típico: "Evergreen" vs "Evergreen (Love Theme...)".
+                track_score = 85
+            else:
+                ratio = difflib.SequenceMatcher(None, input_track, cand_track).ratio()
+                track_score = int(ratio * 100)
+
+        return artist_score, track_score
+
     def _search_musicbrainz(self, artist, track):
         """Search MusicBrainz for recording metadata: cover art, genres, artist image."""
         if not artist or not track:
             return None
         try:
-            # Try exact match first, then clean/fuzzy match
+            # El artista y el título deben calzar cada uno por su lado.
+            ARTIST_MIN = 60
+            TRACK_MIN = 60
+            # Un release de estudio oficial puntúa ~45; por debajo de este
+            # umbral se sigue buscando variantes de consulta.
+            GOOD_RELEASE = 35
+
+            # Se combinan varias consultas. La primera prioriza releases
+            # oficiales y descarta en vivo, que suelen copar los resultados de
+            # grabaciones muy versionadas (p.ej. "Bohemian Rhapsody").
             queries = [
+                f'artist:"{artist}" AND recording:"{track}" AND status:official',
+                f'artist:"{artist}" AND recording:"{track}" AND NOT secondarytype:live',
                 f'artist:"{artist}" AND recording:"{track}"',
-                f'{artist} {track}'
+                f'{artist} {track}',
             ]
-            recordings = []
+            candidates = {}
             for query_str in queries:
                 mb_url = (
                     "https://musicbrainz.org/ws/2/recording/"
-                    f"?query={urllib.parse.quote(query_str)}&fmt=json&limit=5"
+                    f"?query={urllib.parse.quote(query_str)}&fmt=json&limit=10"
                 )
                 req = urllib.request.Request(
                     mb_url, headers={"User-Agent": "RadiosApp/1.0 (radios-sketch@donalex)"}
@@ -619,23 +872,57 @@ class MediaInfoMixin:
                 try:
                     with urllib.request.urlopen(req, timeout=10) as resp:
                         data = json.loads(resp.read().decode("utf-8"))
-                        recs = data.get("recordings", [])
-                        if recs:
-                            recordings = recs
-                            break
                 except Exception:
                     continue
 
-            if not recordings:
+                for rec in data.get("recordings", []):
+                    artist_score, track_score = self._recording_match_score(
+                        rec, artist, track
+                    )
+                    if artist_score < ARTIST_MIN or track_score < TRACK_MIN:
+                        continue
+                    releases = rec.get("releases") or []
+                    quality = max(
+                        (self._release_quality_score(r) for r in releases),
+                        default=0,
+                    )
+                    rec_id = rec.get("id") or f"{artist}|{track}|{rec.get('title')}"
+                    prev = candidates.get(rec_id)
+                    if prev is None or quality > prev["quality"]:
+                        candidates[rec_id] = {
+                            "rec": rec,
+                            "text": artist_score + track_score,
+                            "quality": quality,
+                            "releases": releases,
+                        }
+
+                # Ya hay una grabación con álbum de estudio oficial: no vale la
+                # pena seguir consultando variantes más laxas.
+                if any(c["quality"] >= GOOD_RELEASE for c in candidates.values()):
+                    break
+
+            if not candidates:
+                print(
+                    f"[SONGINFO] Sin match confiable en MusicBrainz para '{artist} - {track}'",
+                    file=sys.stderr,
+                )
                 return None
 
+            # Mejor release primero y, a igualdad, mejor calce de texto.
+            best = max(
+                candidates.values(),
+                key=lambda c: (c["quality"], c["text"]),
+            )
+            rec = best["rec"]
+            releases = self._sort_releases_by_relevance(best["releases"])
+            best_quality = best["quality"]
+
             result = {}
-            rec = recordings[0]
 
             # ── Cover art & Label info: try releases ──
             release_ids = []
-            if rec.get("releases"):
-                for release in rec["releases"][:5]:  # try up to 5 releases
+            if releases:
+                for release in releases[:5]:  # try up to 5 releases
                     rid = release.get("id")
                     if rid:
                         release_ids.append(rid)
@@ -698,6 +985,21 @@ class MediaInfoMixin:
 
                 if result.get("thumbnail") and result.get("label"):
                     break
+
+            # ── Album tracklist (release más relevante) ──
+            # Se omite si el mejor release es un bootleg (best_quality < 0):
+            # mostrar el tracklist de una edición pirata es peor que no
+            # mostrar ninguno. Se guarda en caché junto al resto de metadata.
+            primary_release_id = (
+                releases[0].get("id") if releases and releases[0].get("id") else None
+            )
+            if not primary_release_id and release_ids:
+                primary_release_id = release_ids[0]
+            if primary_release_id and best_quality >= 0:
+                result["release_id"] = primary_release_id
+                tracks = self._fetch_release_tracks(primary_release_id)
+                if tracks:
+                    result["album_tracks"] = tracks
 
             # ── Writer / Composer info from MusicBrainz Work search ──
             try:
@@ -768,8 +1070,8 @@ class MediaInfoMixin:
                     pass
 
                 # ── Artist image fallback via CAA release-group ──
-                if not result.get("thumbnail") and rec.get("releases"):
-                    for release in rec["releases"][:3]:
+                if not result.get("thumbnail") and releases:
+                    for release in releases[:3]:
                         rg_id = (release.get("release-group") or {}).get("id")
                         if not rg_id:
                             continue
@@ -825,12 +1127,18 @@ class MediaInfoMixin:
                 if ac_parts:
                     result["artist"] = "".join(ac_parts).strip()
 
-            # Album from first release
-            if rec.get("releases") and rec["releases"][0].get("title"):
-                result["album"] = rec["releases"][0]["title"]
-                release_date = rec["releases"][0].get("date", "")
+            # Álbum desde el release más relevante (nunca desde un bootleg).
+            if releases and releases[0].get("title") and best_quality >= 0:
+                result["album"] = releases[0]["title"]
+                release_date = releases[0].get("date", "")
                 if release_date:
                     result["year"] = release_date[:4]
+
+            # Las portadas de Cover Art Archive llegan como http:// y quedan
+            # bloqueadas como mixed content en páginas https.
+            thumb = result.get("thumbnail")
+            if isinstance(thumb, str) and thumb.startswith("http://"):
+                result["thumbnail"] = "https://" + thumb[len("http://"):]
 
             return result if result else None
         except Exception as e:

@@ -56,6 +56,9 @@ def init_db() -> None:
             description TEXT,
             thumbnail TEXT,
             wiki_url TEXT,
+            release_id TEXT,
+            album_tracks TEXT,
+            meta_version INTEGER DEFAULT 1,
             fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """
@@ -68,11 +71,17 @@ def init_db() -> None:
         "description",
         "thumbnail",
         "wiki_url",
+        "release_id",
+        "album_tracks",
     ]:
         try:
             c.execute(f"ALTER TABLE song_cache ADD COLUMN {col} TEXT")
         except sqlite3.OperationalError:
             pass
+    try:
+        c.execute("ALTER TABLE song_cache ADD COLUMN meta_version INTEGER DEFAULT 1")
+    except sqlite3.OperationalError:
+        pass
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS feedback (
@@ -101,6 +110,7 @@ def init_db() -> None:
     for col, typedef in [
         ("editorial_notes", "TEXT DEFAULT ''"),
         ("is_featured", "INTEGER DEFAULT 0"),
+        ("voice_name", "TEXT DEFAULT ''"),
     ]:
         try:
             c.execute(f"ALTER TABLE curated_radios ADD COLUMN {col} {typedef}")
