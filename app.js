@@ -6,7 +6,7 @@
 const API_SERVERS = ['de1', 'de2', 'nl1', 'at1'];
 const UA = 'RadiosSketchApp/1.0';
 const STORE_KEY = 'radios_playlist';
-const APP_VERSION = '1.6.18';
+const APP_VERSION = '1.6.20';
 
 // Resolve API path relative to base path (handles /radios subpath on production)
 function getApiUrl(path) {
@@ -126,6 +126,30 @@ const EQ_PRESETS = {
    compara WHATS_NEW[APP_VERSION] con la versión ya vista (radios_changelog_seen)
    y se muestra solo cuando no coinciden. */
 const WHATS_NEW = {
+  '1.6.20': {
+    items: [
+      { icon: 'fa-car', text: 'En la pantalla del auto (Apple Car Play y Android Auto) ahora se ve el nombre del artista donde antes aparecía la emisora, y arriba solo el nombre de la canción.' },
+      { icon: 'fa-compact-disc', text: 'El nombre de la emisora no se pierde: se muestra como dato secundario de la canción que suena.' },
+    ],
+    tutorial: [
+      { icon: 'fa-compact-disc', title: 'Está Sonando', text: 'Toca la tarjeta para ver letra, detalles y portada en grande. Se auto-abre al cambiar de canción y se cierra tras 1 minuto.' },
+      { icon: 'fa-microphone', title: 'Comandos de voz', text: 'Toca el ícono de micrófono al inicio de la barra superior para pedir una emisora por voz (ej. "reproduce infinita").' },
+      { icon: 'fa-bookmark', title: 'Historial y playlist', text: 'Guarda tus canciones en tu historial personal con el marcador o agrégalas a tu playlist del servidor con el botón +.' },
+      { icon: 'fa-sliders', title: 'Efectos y ecualizador', text: 'Personaliza el sonido con el ecualizador gráfico y los efectos de audio desde la barra superior.' },
+    ],
+  },
+  '1.6.19': {
+    items: [
+      { icon: 'fa-car', text: 'En la pantalla del auto (Apple Car Play y Android Auto) ahora se ve mejor qué está sonando: el logo de la emisora llega en el tamaño y formato correctos.' },
+      { icon: 'fa-image', text: 'Las emisoras sin logo propio ya no aparecen en blanco: se muestra el ícono de la app.' },
+    ],
+    tutorial: [
+      { icon: 'fa-microphone', title: 'Comandos de voz', text: 'Toca el ícono de micrófono al inicio de la barra superior para pedir una emisora por voz (ej. "reproduce infinita").' },
+      { icon: 'fa-compact-disc', title: 'Está Sonando', text: 'Toca la tarjeta para ver letra, detalles y portada en grande. Se auto-abre al cambiar de canción y se cierra tras 1 minuto.' },
+      { icon: 'fa-bookmark', title: 'Historial y playlist', text: 'Guarda tus canciones en tu historial personal con el marcador o agrégalas a tu playlist del servidor con el botón +.' },
+      { icon: 'fa-sliders', title: 'Efectos y ecualizador', text: 'Personaliza el sonido con el ecualizador gráfico y los efectos de audio desde la barra superior.' },
+    ],
+  },
   '1.6.18': {
     items: [
       { icon: 'fa-compact-disc', text: 'Álbum y lista de temas mucho más certeros: se elige la edición oficial y se descartan bootlegs, discos en vivo y remixes.' },
@@ -1554,17 +1578,77 @@ async function prefilterResults() {
   healthCheckAborted = false;
 }
 
-/* ── Media Session (Lock Screen / Control Center) ── */
+/* ── Media Session (Lock Screen / Control Center / CarPlay) ── */
+
+/* URL absoluta: la pantalla de bloqueo y el auto descargan la carátula por su
+   cuenta, fuera de la página. Una ruta relativa ("icon.svg") no la pueden
+   resolver y la ventana queda sin imagen. */
+function absoluteUrl(src) {
+  if (!src) return '';
+  try {
+    return new URL(src, window.location.href).href;
+  } catch {
+    return src;
+  }
+}
+
+/* Tipo real de la imagen según la extensión. Declarar "image/png" para un JPG
+   o un AVIF hace que iOS descarte la carátula. */
+function artworkType(url) {
+  const clean = String(url || '').split('?')[0].split('#')[0].toLowerCase();
+  if (clean.endsWith('.jpg') || clean.endsWith('.jpeg')) return 'image/jpeg';
+  if (clean.endsWith('.webp')) return 'image/webp';
+  if (clean.endsWith('.avif')) return 'image/avif';
+  if (clean.endsWith('.svg')) return 'image/svg+xml';
+  return 'image/png';
+}
+
+/* El auto (CarPlay / Android Auto) y la pantalla de bloqueo muestran dos líneas:
+   arriba el título de la canción y abajo el artista. La emisora entrega todo
+   junto ("Artista - Canción"), así que hay que separarlo para que cada dato
+   caiga en su línea. Si no hay separador, el texto completo es la canción. */
+function splitTrackTitle(rawTitle) {
+  let clean = String(rawTitle || '').trim();
+  if (!clean) return { artist: '', song: '' };
+  // Quita la marca de la emisora pegada al final ("... | Radio XYZ 98.5").
+  clean = clean.replace(/\s*\|\s*(radio|emisora|fm|stream|online|en vivo|www\.|https?:).*/i, '').trim();
+
+  for (const sep of [' – ', ' — ', ' - ', ' | ']) {
+    const idx = clean.indexOf(sep);
+    if (idx <= 0) continue;
+    const artist = clean.slice(0, idx).trim();
+    const song = clean.slice(idx + sep.length).trim();
+    if (artist && song) return { artist, song };
+  }
+  return { artist: '', song: clean };
+}
+
 function updateMediaSession(station, trackTitle) {
   if (!('mediaSession' in navigator)) return;
-  const title = trackTitle || station.name || 'Radios';
+  const stationName = station.name || 'Radios';
+  const { artist: trackArtist, song: trackSong } = splitTrackTitle(trackTitle);
+  // Con canción: arriba solo la canción, abajo el artista y la emisora en el álbum.
+  // Sin canción todavía: se queda como antes (nombre de la emisora).
+  const title = trackSong || stationName;
+  const artist = trackArtist || stationName;
+  const album = trackSong ? stationName : 'En vivo';
   const artwork = [];
-  if (station.favicon) artwork.push({ src: station.favicon, sizes: '256x256', type: 'image/png' });
-  artwork.push({ src: 'icon.svg', sizes: '256x256', type: 'image/svg+xml' });
+  // 1) Logo propio de la emisora. Va primero para que el sistema lo prefiera.
+  if (station.favicon) {
+    artwork.push({
+      src: absoluteUrl(station.favicon),
+      sizes: '512x512',
+      type: artworkType(station.favicon)
+    });
+  }
+  // 2) Respaldo en PNG cuadrado, con el tamaño real de cada archivo.
+  //    iOS/CarPlay no dibuja SVG en la ventana de reproducción.
+  artwork.push({ src: absoluteUrl(getApiUrl('/icon-512.png')), sizes: '512x512', type: 'image/png' });
+  artwork.push({ src: absoluteUrl(getApiUrl('/icon-192.png')), sizes: '192x192', type: 'image/png' });
   navigator.mediaSession.metadata = new MediaMetadata({
     title,
-    artist: station.name || 'Radios',
-    album: 'Radios App',
+    artist,
+    album,
     artwork
   });
 }

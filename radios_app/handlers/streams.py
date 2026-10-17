@@ -13,6 +13,26 @@ import urllib.parse
 import urllib.request
 
 
+# Leading broadcaster marketing phrases (e.g. "Now on radio...") that should be
+# stripped from stream titles so only the actual song name is shown.
+# Layout matched: <phrase> [optional "<station>":] <song>
+_STREAM_TITLE_FILLER_RE = re.compile(
+    r"^(?:"
+    r"now\s+(?:on\s+)?(?:air|radio)"
+    r"|now\s+playing(?:\s+on\s+(?:air|radio|fm))?"
+    r"|currently\s+(?:playing\s+)?(?:on\s+)?(?:air|radio|fm)"
+    r"|playing\s+(?:right\s+now\s+)?(?:live\s+)?(?:on\s+)?(?:the\s+)?(?:air|radio|fm)"
+    r"|live\s+(?:now\s+)?(?:on|at)\s+(?:the\s+)?(?:air|radio)"
+    r"|you'?re\s+(?:now\s+)?(?:listening|hearing)\s+(?:to\s+)?(?:the\s+)?(?:air|radio)"
+    r"|listening\s+(?:to\s+)?(?:the\s+)?(?:air|radio)"
+    r"|en\s+vivo(?:\s+en)?\s+(?:la\s+|una\s+)?(?:radio|emisora)"
+    r"|est[áa]s\s+escuchando\s+(?:la\s+)?(?:radio|emisora)"
+    r")"
+    r"(?:\s*[^:\-–—…|;]{1,24}\s*:)?",
+    re.IGNORECASE,
+)
+
+
 class StreamsMixin:
     def handle_nowplaying_fragment(self):
         """HTMX endpoint: returns an HTML fragment for the 'now playing' bar.
@@ -83,8 +103,10 @@ class StreamsMixin:
         pulse_html = '<span class="htmx-np-pulse">&#9835;</span>'
 
         if title:
-            # Clean up common "StreamTitle=" artifacts
-            title = re.sub(r"StreamTitle='?([^;']*)'?.*", r"\1", title).strip()
+            # Clean up marketing prefixes ("Now on radio...") and artifacts
+            title = self._clean_stream_title(title)
+
+        if title:
             html_fragment = f"""<div class="htmx-np-inner htmx-np-active" title="Toca para ver info detallada">
   {pulse_html}
   {favicon_html}
@@ -138,6 +160,7 @@ class StreamsMixin:
         # 1) Try ICY peek (most reliable for SHOUTcast/Icecast)
         try:
             title = self._peek_icy_metadata(target_url)
+            title = self._clean_stream_title(title)
             if title:
                 self.send_json({"title": title, "source": "icy_peek"})
                 return
@@ -173,6 +196,7 @@ class StreamsMixin:
                     body = resp.read().decode("utf-8", errors="replace").strip()
 
                 title = self._parse_metadata(body, ep)
+                title = self._clean_stream_title(title)
                 if title:
                     self.send_json({"title": title, "source": ep})
                     return
@@ -235,6 +259,21 @@ class StreamsMixin:
             return None
 
         return None
+
+    def _clean_stream_title(self, title):
+        """Strip broadcaster marketing phrases (e.g. 'Now on radio...') and
+        'StreamTitle=' artifacts from a stream title, keeping only the song
+        name. Returns None when nothing meaningful remains."""
+        if not title:
+            return None
+        t = title.strip()
+        t = re.sub(r"StreamTitle='?([^;']*)'?.*", r"\1", t)
+        t = re.sub(r"<[^>]+>", "", t)
+        if not t.strip():
+            return None
+        t = _STREAM_TITLE_FILLER_RE.sub("", t)
+        t = re.sub(r"^[\s:.;…•|·▶▷►♪♫♬\-–—]+", "", t).strip()
+        return t if t else None
 
     def handle_healthcheck(self):
         parsed_path = urllib.parse.urlparse(self.path)

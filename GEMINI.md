@@ -1,45 +1,35 @@
-# Radios App
+# Radios App — Reglas de Agentes
 
-Aplicación de streaming de radios online con estética de sketch/manual.
+Guía técnica compacta para agentes de IA que trabajen en este repositorio.
 
-## Infraestructura
-- **Puerto Local:** 8000
-- **Servicio:** `radios-app.service` (usuario)
-- **Ruta Nginx:** `/radios/`
-- **Tecnología:** Python `http.server` sirviendo archivos estáticos (HTML/JS/CSS).
+## Reglas del Proyecto
 
-## Comandos Útiles
-- **Reiniciar Servicio:** `systemctl --user restart radios-app.service`
-- **Ver Logs:** `journalctl --user -u radios-app.service -f`
-- **Actualizar Deep Search (Spider):** `./venv/bin/python scripts/spider.py`
+1. **Documentación Maestra (`alex.md`):** Mantener siempre la sección `## Último Realizado` al inicio. Escribir en lenguaje simple para un lego (no técnico), una línea por hito y con fecha (`DD-MM-YYYY: descripción simple`). No volcar detalles internos de código ni commits en `alex.md`.
+2. **Confirmación Obligatoria:** No hacer commits a Git sin confirmación explícita del usuario ("funciona", "quedó bien", "perfecto").
+3. **Cloud First:** No compilar ni correr tareas pesadas en local; usar GitHub Actions (`.github/workflows/ci.yml`). Pruebas rápidas locales solo si toman < 30s (`python3 scripts/security_smoke.py`).
+4. **Aviso por voz:** Al terminar tareas largas, avisar por TTS con `bash ~/skills/voz-local/scripts/hablar.sh "Don Alex, terminé. <resultado>"`.
 
-## Deep Search (Scrapling)
-La aplicación utiliza un sistema de búsqueda profunda que complementa los resultados de Radio Browser API con una base de datos local (`radios_db.json`).
-- **Scripts:** `scripts/spider.py` raspa directorios externos (ej: internet-radio.com).
-- **Entorno:** Requiere el entorno virtual `./venv/` con `scrapling` instalado.
-- **Automatización:** Se recomienda ejecutar el spider semanalmente para refrescar los enlaces.
+## Infraestructura y Homelab
+
+- **Puerto Local:** `8000`.
+- **Servicio Systemd:** `systemctl --user restart radios-app.service`
+- **Logs:** `journalctl --user -u radios-app.service -f`
+- **Nginx Subpath:** `/radios/` redirige a `http://localhost:8000/`. Los endpoints deben tolerar raíz o subpath `/radios/` (`getApiUrl()` en frontend).
+- **Acceso:** Tailscale en `https://donalex.van-solfeggio.ts.net/radios/` y Funnel público en puerto 10000.
+
+## Arquitectura Backend y Datos
+
+- **Servidor:** Python `http.server` modular en `server.py` y `radios_app/handlers/`:
+  - `admin.py`, `media_info.py`, `playlist_feedback.py`, `search.py`, `static.py`, `streams.py`, `tts_news.py`.
+- **Bases de Datos SQLite:**
+  - `radios_curated.db`: catálogo curado (`curated_radios`) y votos (`feedback`). Versionada en git.
+  - `radios_cache.db`: cachés de runtime (`song_cache`, `lyrics_cache`). Ignorada por git.
+  - `radios_rate_limit.db`: tracking de rate limit por IP. Ignorada por git.
+- **Deep Search:** `scripts/spider.py` en `./venv/` con `scrapling`.
 
 ## Seguridad y Admin
 
-- **Allowlist estática:** solo se sirven archivos públicos y `vendor/`. Archivos como `server.py`, `.git`, bases SQLite y scripts quedan bloqueados.
-- **Admin por Tailscale:** las rutas admin y mutaciones de curadas siguen restringidas a la red Tailscale.
-- **Basic Auth opcional:** definir `ADMIN_USER` y `ADMIN_PASSWORD` para proteger `/admin` y las mutaciones.
-- **Token de admin opcional:** definir `ADMIN_TOKEN`. La página `/admin` muestra un login propio y las peticiones usan el header `X-Admin-Token`.
-- **Rate limiting:** persistente en SQLite por IP para TTS, websearch, noticias, letras, proxy y metadata.
+- **Allowlist estática:** Solo se sirven archivos públicos y `vendor/`.
+- **Admin por Tailscale:** `/admin` restringido a red Tailscale y localhost. Soporta `X-Admin-Token` o Basic Auth.
+- **Rate limiting:** Persistente en SQLite por IP para TTS, websearch, noticias, letras, proxy y metadata.
 - **Smoke tests:** `python3 scripts/security_smoke.py`.
-- **CI:** `.github/workflows/ci.yml`.
-
-## Arquitectura Backend
-
-- `server.py`: entrypoint HTTP, routing, auth y helpers.
-- `radios_app/config.py`: configuración central.
-- `radios_app/storage.py`: SQLite y migraciones.
-- `radios_app/security.py`: SSRF, auth, IP y rate limiting persistente.
-- `radios_app/handlers/`: mixins por dominio:
-  - `admin.py`
-  - `static.py`
-  - `search.py`
-  - `media_info.py`
-  - `streams.py`
-  - `tts_news.py`
-  - `playlist_feedback.py`

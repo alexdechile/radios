@@ -1,7 +1,7 @@
 // Versión de la app. Debe coincidir con APP_VERSION en app.js, el ?v= de
 // index.html y version_check.json. Al subirla se renombra la caché y el SW
 // vuelve a bajar todos los assets.
-const APP_V = '1.6.18';
+const APP_V = '1.6.20';
 const CACHE_NAME = `radios-sketch-v${APP_V}`;
 
 // Determinar el prefijo base según dónde esté instalado el Service Worker (ej. '/' o '/radios/')
