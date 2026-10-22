@@ -6,7 +6,7 @@
 const API_SERVERS = ['de1', 'de2', 'nl1', 'at1'];
 const UA = 'RadiosSketchApp/1.0';
 const STORE_KEY = 'radios_playlist';
-const APP_VERSION = '1.6.20';
+const APP_VERSION = '1.6.21';
 
 // Resolve API path relative to base path (handles /radios subpath on production)
 function getApiUrl(path) {
@@ -100,6 +100,18 @@ function restoreLastStation() {
    compara WHATS_NEW[APP_VERSION] con la versión ya vista (radios_changelog_seen)
    y se muestra solo cuando no coinciden. */
 const WHATS_NEW = {
+  '1.6.21': {
+    items: [
+      { icon: 'fa-sliders', text: 'Quitamos el ecualizador y los efectos de audio (Stereo Width, Surround y Bass Boost) para que escuches el sonido original de cada emisora.' },
+      { icon: 'fa-music', text: 'La reproducción vuelve a audio nativo: menos capas entre la radio y tus parlantes.' },
+      { icon: 'fa-wrench', text: 'Se simplificó la barra superior: menos botones, la misma radio.' },
+    ],
+    tutorial: [
+      { icon: 'fa-compact-disc', title: 'Está Sonando', text: 'Toca la tarjeta para ver letra, detalles y portada en grande. Se auto-abre al cambiar de canción y se cierra tras 1 minuto.' },
+      { icon: 'fa-microphone', title: 'Comandos de voz', text: 'Toca el ícono de micrófono al inicio de la barra superior para pedir una emisora por voz (ej: "reproduce infinita").' },
+      { icon: 'fa-bookmark', title: 'Historial y playlist', text: 'Guarda tus canciones en tu historial personal con el marcador o agrégalas a tu playlist del servidor con el botón +.' },
+    ],
+  },
   '1.6.20': {
     items: [
       { icon: 'fa-car', text: 'En la pantalla del auto (Apple Car Play y Android Auto) ahora se ve el nombre del artista donde antes aparecía la emisora, y arriba solo el nombre de la canción.' },
