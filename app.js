@@ -26,16 +26,6 @@ let activeQueue = 'playlist';
 let metadataInterval = null;
 let nowPlayingInterval = null;
 let metadataTrackerKey = null; // evita arrancar el tracker dos veces para la misma estación
-let audioCtx = null;
-let eqFilters = [];   // 5 BiquadFilter nodes
-let eqActive = false; // panel open state
-
-// Audio Effects state
-let effectsActive = false; // panel open state
-let stereoWidthNode = null;  // { splitter, gains, merger }
-let surroundNode = null;     // { splitter, delay, merger }
-let bassBoostFilter = null;  // BiquadFilterNode
-let effectsInjected = false; // whether effects are in the chain
 
 // Screen Wake Lock
 let wakeLock = null;
@@ -105,22 +95,6 @@ function restoreLastStation() {
   return true;
 }
 
-// EQ band config: [frequency Hz, type]
-const EQ_BANDS = [
-  { freq: 60,    type: 'lowshelf'  },
-  { freq: 250,   type: 'peaking'   },
-  { freq: 1000,  type: 'peaking'   },
-  { freq: 4000,  type: 'peaking'   },
-  { freq: 16000, type: 'highshelf' },
-];
-
-const EQ_PRESETS = {
-  flat:   [0,   0,   0,   0,   0 ],
-  bass:   [8,   4,   0,  -2,  -2 ],
-  vocal:  [-2,  0,   5,   4,   0 ],
-  treble: [-2, -2,   0,   4,   8 ],
-};
-
 /* ── Novedades y tutorial mostrados una vez después de actualizar ──
    Agrega aquí una entrada por cada versión liberada: el modal de inicio
    compara WHATS_NEW[APP_VERSION] con la versión ya vista (radios_changelog_seen)
@@ -135,7 +109,7 @@ const WHATS_NEW = {
       { icon: 'fa-compact-disc', title: 'Está Sonando', text: 'Toca la tarjeta para ver letra, detalles y portada en grande. Se auto-abre al cambiar de canción y se cierra tras 1 minuto.' },
       { icon: 'fa-microphone', title: 'Comandos de voz', text: 'Toca el ícono de micrófono al inicio de la barra superior para pedir una emisora por voz (ej. "reproduce infinita").' },
       { icon: 'fa-bookmark', title: 'Historial y playlist', text: 'Guarda tus canciones en tu historial personal con el marcador o agrégalas a tu playlist del servidor con el botón +.' },
-      { icon: 'fa-sliders', title: 'Efectos y ecualizador', text: 'Personaliza el sonido con el ecualizador gráfico y los efectos de audio desde la barra superior.' },
+
     ],
   },
   '1.6.19': {
@@ -147,7 +121,7 @@ const WHATS_NEW = {
       { icon: 'fa-microphone', title: 'Comandos de voz', text: 'Toca el ícono de micrófono al inicio de la barra superior para pedir una emisora por voz (ej. "reproduce infinita").' },
       { icon: 'fa-compact-disc', title: 'Está Sonando', text: 'Toca la tarjeta para ver letra, detalles y portada en grande. Se auto-abre al cambiar de canción y se cierra tras 1 minuto.' },
       { icon: 'fa-bookmark', title: 'Historial y playlist', text: 'Guarda tus canciones en tu historial personal con el marcador o agrégalas a tu playlist del servidor con el botón +.' },
-      { icon: 'fa-sliders', title: 'Efectos y ecualizador', text: 'Personaliza el sonido con el ecualizador gráfico y los efectos de audio desde la barra superior.' },
+
     ],
   },
   '1.6.18': {
@@ -161,7 +135,7 @@ const WHATS_NEW = {
       { icon: 'fa-microphone', title: 'Comandos de voz', text: 'Toca el ícono de micrófono al inicio de la barra superior para pedir una emisora por voz (ej. "reproduce infinita").' },
       { icon: 'fa-compact-disc', title: 'Está Sonando', text: 'Toca la tarjeta para ver letra, detalles y portada en grande. Se auto-abre al cambiar de canción y se cierra tras 1 minuto.' },
       { icon: 'fa-bookmark', title: 'Historial y playlist', text: 'Guarda tus canciones en tu historial personal con el marcador o agrégalas a tu playlist del servidor con el botón +.' },
-      { icon: 'fa-sliders', title: 'Efectos y ecualizador', text: 'Personaliza el sonido con el ecualizador gráfico y los efectos de audio desde la barra superior.' },
+
     ],
   },
   '1.6.17': {
@@ -169,13 +143,13 @@ const WHATS_NEW = {
       { icon: 'fa-wrench', text: 'La radio recordada ahora también reactiva el título y la canción en pantalla cuando pulsas Reproducir tras un bloqueo de autoplay.' },
       { icon: 'fa-microphone', text: 'Comandos de voz más precisos: frases como "pon la radio para dormir" ya no la pausan por error.' },
       { icon: 'fa-compact-disc', text: 'El detalle de canción vuelve a cerrarse solo tras 60 segundos, incluso después de ampliar la portada, la letra o los temas del álbum.' },
-      { icon: 'fa-mobile-screen-button', text: 'En iPhone, abrir el ecualizador o los efectos ya no fuerza que todas las emisoras pasen por el servidor.' },
+      { icon: 'fa-mobile-screen-button', text: 'En iPhone la reproducción sigue en segundo plano sin efectos de audio.' },
     ],
     tutorial: [
       { icon: 'fa-microphone', title: 'Comandos de voz', text: 'Toca el ícono de micrófono al inicio de la barra superior para pedir una emisora por voz (ej. "reproduce infinita").' },
       { icon: 'fa-compact-disc', title: 'Está Sonando', text: 'Toca la tarjeta para ver letra, detalles y portada en grande. Se auto-abre al cambiar de canción y se cierra tras 1 minuto.' },
       { icon: 'fa-bookmark', title: 'Historial y playlist', text: 'Guarda tus canciones en tu historial personal con el marcador o agrégalas a tu playlist del servidor con el botón +.' },
-      { icon: 'fa-sliders', title: 'Efectos y ecualizador', text: 'Personaliza el sonido con el ecualizador gráfico y los efectos de audio desde la barra superior.' },
+
     ],
   },
   '1.6.16': {
@@ -188,7 +162,7 @@ const WHATS_NEW = {
       { icon: 'fa-microphone', title: 'Comandos de voz', text: 'Toca el ícono de micrófono al inicio de la barra superior para pedir una emisora por voz (ej. "reproduce infinita").' },
       { icon: 'fa-compact-disc', title: 'Está Sonando', text: 'Toca la tarjeta para ver letra, detalles y portada en grande. Se auto-abre al cambiar de canción y se cierra tras 1 minuto.' },
       { icon: 'fa-bookmark', title: 'Historial y playlist', text: 'Guarda tus canciones en tu historial personal con el marcador o agrégalas a tu playlist del servidor con el botón +.' },
-      { icon: 'fa-sliders', title: 'Efectos y ecualizador', text: 'Personaliza el sonido con el ecualizador gráfico y los efectos de audio desde la barra superior.' },
+
     ],
   },
   '1.6.15': {
@@ -197,14 +171,14 @@ const WHATS_NEW = {
       { icon: 'fa-hand-pointer', text: 'Apertura táctil limpia: se eliminó el clic sostenido en la tarjeta "Está Sonando", ahora abre al primer toque sin cancelaciones.' },
       { icon: 'fa-clock', text: 'Auto-apertura y cierre en 1 minuto: el modal vuelve a mostrarse con cada tema y se oculta automáticamente tras 60 segundos.' },
       { icon: 'fa-compact-disc', text: 'Portada ampliable y temas del álbum: visualización en grande de la carátula y listado completo de canciones del disco.' },
-      { icon: 'fa-sliders', text: 'Efectos de audio optimizados: ecualizador, Stereo Width, Surround y Bass Boost sin cortes de reproducción.' },
+
       { icon: 'fa-link', text: 'Deep links por alias: abre directamente una emisora curada con ?radio=alias.' },
     ],
     tutorial: [
       { icon: 'fa-microphone', title: 'Comandos de voz', text: 'Toca el ícono de micrófono al inicio de la barra superior para pedir una emisora por voz (ej. "reproduce infinita").' },
       { icon: 'fa-compact-disc', title: 'Está Sonando', text: 'Toca la tarjeta para ver letra, detalles y portada en grande. Se auto-abre al cambiar de canción y se cierra tras 1 minuto.' },
       { icon: 'fa-bookmark', title: 'Historial y playlist', text: 'Guarda tus canciones en tu historial personal con el marcador o agrégalas a tu playlist del servidor con el botón +.' },
-      { icon: 'fa-sliders', title: 'Efectos y ecualizador', text: 'Personaliza el sonido con el ecualizador gráfico y los efectos de audio desde la barra superior.' },
+
     ],
   },
 };
@@ -220,7 +194,6 @@ let alarmCheckerInterval = null;
 // News-by-voice state — EN STANDBY
 let newsEnabled = localStorage.getItem('radios_news_enabled') === 'true' && false;
 let lastNewsHour = -1;
-let duckGain = null;
 let newsPlaying = false;
 
 // Playlist navigation state
@@ -564,12 +537,6 @@ async function init() {
   // Init News-by-Voice — EN STANDBY (comentado, sin eliminar)
   // initNewsFeature();
 
-  // Init EQ Panel UI
-  initEqPanel();
-
-  // Init Effects Panel UI
-  initEffectsPanel();
-
   // Init Info Panel UI
   initInfoPanel();
 
@@ -595,416 +562,6 @@ async function init() {
 
   // Mostrar novedades/tutorial una vez después de una recarga manual.
   checkChangelogOnBoot();
-}
-
-async function initEqualizer(force = false) {
-  const audio = document.getElementById('audioPlayer');
-
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  window.isIOSDirectAudio = isIOS;
-
-  if (audioCtx) {
-    if (audioCtx.state === 'suspended') {
-      try { await audioCtx.resume(); } catch (_) {}
-    }
-    return;
-  }
-
-  // Por defecto usamos audio nativo. Web Audio se activa solo cuando el
-  // usuario abre el ecualizador o los efectos, para no romper la reproducción
-  // en Android/Windows.
-  if (!force) return;
-
-  if (isIOS) {
-    console.log('[iOS] Bypassing AudioContext for HTML5 Audio to allow background play.');
-    const eqBtn = document.getElementById('btnEqToggle');
-    if (eqBtn) {
-       eqBtn.style.opacity = '0.5';
-       eqBtn.title = 'Efectos desactivados en iOS para reproducción en segundo plano';
-       eqBtn.onclick = (e) => {
-         e.preventDefault();
-         e.stopPropagation();
-         alert('Los efectos de audio están desactivados en iPhone/iPad para evitar cortes cuando se bloquea la pantalla.');
-       };
-    }
-    return;
-  }
-
-  try {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  } catch (e) {
-    console.error('AudioContext error:', e);
-    audioCtx = null;
-    return;
-  }
-
-  if (audioCtx.state === 'suspended') {
-    try { await audioCtx.resume(); } catch (_) {}
-  }
-
-  // Android/Chrome exigen que el <audio> esté en el mismo origen para que
-  // createMediaElementSource no silencie el stream. Si venía directo, lo
-  // reencaminamos por el proxy local antes de crear el grafo.
-  ensureCurrentStreamProxiedForWebAudio();
-
-  // Build EQ filter chain
-  eqFilters = EQ_BANDS.map((band, i) => {
-    const filter = audioCtx.createBiquadFilter();
-    filter.type = band.type;
-    filter.frequency.value = band.freq;
-    filter.Q.value = 1.4;
-    const saved = parseFloat(localStorage.getItem(`eq_band_${i}`) || '0');
-    filter.gain.value = Number.isFinite(saved) ? saved : 0;
-    return filter;
-  });
-
-  // Chain: source → filter[0] → filter[1] → effects → destination
-  try {
-    const source = audioCtx.createMediaElementSource(audio);
-    let node = source;
-    for (const filter of eqFilters) {
-      node.connect(filter);
-      node = filter;
-    }
-    node = createEffectsChain(node);
-    // Duck node for news voice-over
-    duckGain = audioCtx.createGain();
-    duckGain.gain.value = 1.0;
-    node.connect(duckGain);
-    duckGain.connect(audioCtx.destination);
-  } catch (e) {
-    console.error('No se pudo conectar Web Audio, se mantiene audio nativo:', e);
-    try { audioCtx.close(); } catch (_) {}
-    audioCtx = null;
-    eqFilters = [];
-    effectsInjected = false;
-    if (duckGain) {
-      try { duckGain.disconnect(); } catch (_) {}
-      duckGain = null;
-    }
-    return;
-  }
-
-  // Si el cambio de src dejó el audio pausado, reanudar sin salir del gesto.
-  if (audio.paused && currentPlayingStation?.url) {
-    try {
-      const resumePlayback = player ? player.play() : audio.play();
-      if (resumePlayback && typeof resumePlayback.catch === 'function') {
-        resumePlayback.catch((err) => console.warn('[FX] No se pudo reanudar el audio:', err));
-      }
-    } catch (err) {
-      console.warn('[FX] Error al reanudar audio:', err);
-    }
-  }
-
-  // Sync slider UI to restored values
-  EQ_BANDS.forEach((_, i) => {
-    const slider = document.getElementById(`eqBand${i}`);
-    const valEl  = document.getElementById(`eqVal${i}`);
-    if (!slider || !eqFilters[i]) return;
-    const saved = parseFloat(localStorage.getItem(`eq_band_${i}`) || '0');
-    slider.value = Number.isFinite(saved) ? saved : 0;
-    valEl.textContent = saved > 0 ? `+${saved}` : `${saved}`;
-  });
-}
-
-/* ── Enrutamiento de audio para Web Audio ──
-   En Android/Chrome, createMediaElementSource sobre un stream cross-origin
-   puede dejar el audio en silencio. Cuando el grafo de efectos está activo
-   usamos el proxy same-origin para poder procesar el stream sin cortes. */
-function shouldProxyForWebAudio() {
-  // Solo cuando el grafo de Web Audio existe de verdad. No basta con que el
-  // panel esté abierto: en iOS/Android initEqualizer puede abortar sin crear
-  // el AudioContext, y en ese caso el audio debe seguir nativo (sin proxy).
-  return !!audioCtx;
-}
-
-function ensureCurrentStreamProxiedForWebAudio() {
-  const stationUrl = currentPlayingStation?.url;
-  const audio = document.getElementById('audioPlayer');
-  if (!stationUrl || !audio) return;
-
-  const proxyUrl = getApiUrl(`/proxy?url=${encodeURIComponent(stationUrl)}`);
-  let currentUrl = null;
-  let targetUrl = null;
-  try {
-    currentUrl = new URL(audio.src, window.location.href);
-    targetUrl = new URL(proxyUrl, window.location.href);
-  } catch (_) {
-    return;
-  }
-
-  const alreadyProxied =
-    currentUrl.pathname === targetUrl.pathname &&
-    currentUrl.searchParams.get('url') === stationUrl;
-  if (alreadyProxied) return;
-
-  const wasPlaying = !audio.paused;
-  // El proxy es same-origin: no necesita CORS y evita el silencio de Web Audio.
-  audio.removeAttribute('crossOrigin');
-  audio.src = proxyUrl;
-  audio.load();
-
-  if (wasPlaying && player) {
-    const resume = player.play();
-    if (resume && typeof resume.catch === 'function') {
-      resume.catch((err) => console.warn('[FX] No se pudo reanudar tras enrutar por proxy:', err));
-    }
-  }
-}
-
-/* ── EQ Panel UI ── */
-function initEqPanel() {
-  const btnToggle = document.getElementById('btnEqToggle');
-  const panel     = document.getElementById('eqPanel');
-  if (!panel) return;
-
-  function toggleEq() {
-    eqActive = !eqActive;
-    panel.classList.toggle('hidden', !eqActive);
-    if (eqActive) initEqualizer(true).catch((e) => console.error('EQ error:', e));
-    if (btnToggle) btnToggle.classList.toggle('eq-active', eqActive);
-    // Close info panel if open
-    if (eqActive && infoActive) {
-      infoActive = false;
-      const infoPanel = document.getElementById('infoPanel');
-      if (infoPanel) infoPanel.classList.add('hidden');
-      const infoBtn = document.getElementById('btnInfoToggle');
-      if (infoBtn) infoBtn.classList.remove('info-active');
-    }
-  }
-
-  if (btnToggle) btnToggle.addEventListener('click', toggleEq);
-
-  // Slider → BiquadFilter gain
-  EQ_BANDS.forEach((_, i) => {
-    const slider = document.getElementById(`eqBand${i}`);
-    const valEl  = document.getElementById(`eqVal${i}`);
-    if (!slider) return;
-
-    slider.addEventListener('input', () => {
-      const val = parseFloat(slider.value);
-      valEl.textContent = val > 0 ? `+${val}` : `${val}`;
-      localStorage.setItem(`eq_band_${i}`, val);
-      if (eqFilters[i]) eqFilters[i].gain.value = val;
-      // Clear active preset highlight
-      document.querySelectorAll('.btn-eq-preset').forEach(b => b.classList.remove('active'));
-    });
-  });
-
-  // Preset buttons
-  document.querySelectorAll('.btn-eq-preset').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const preset = EQ_PRESETS[btn.dataset.preset];
-      if (!preset) return;
-
-      preset.forEach((gain, i) => {
-        const slider = document.getElementById(`eqBand${i}`);
-        const valEl  = document.getElementById(`eqVal${i}`);
-        if (!slider) return;
-        slider.value = gain;
-        valEl.textContent = gain > 0 ? `+${gain}` : `${gain}`;
-        localStorage.setItem(`eq_band_${i}`, gain);
-        if (eqFilters[i]) eqFilters[i].gain.value = gain;
-      });
-
-      document.querySelectorAll('.btn-eq-preset').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-    });
-  });
-}
-
-/* ── Audio Effects Chain ── */
-function createEffectsChain(inputNode) {
-  if (!audioCtx) return inputNode;
-
-  // Stereo Width: Mid/Side processing
-  const swSplitter = audioCtx.createChannelSplitter(2);
-  const swGainL = audioCtx.createGain();
-  const swGainR = audioCtx.createGain();
-  const swGainCrossL = audioCtx.createGain();
-  const swGainCrossR = audioCtx.createGain();
-  const swMerger = audioCtx.createChannelMerger(2);
-
-  const rawWidth = parseFloat(localStorage.getItem('fx_stereo_width') || '100');
-  const savedWidth = Number.isFinite(rawWidth) ? rawWidth : 100;
-  const widthNorm = savedWidth / 100;
-  const alpha = (1 + widthNorm) / 2;
-  const beta  = (1 - widthNorm) / 2;
-  swGainL.gain.value = alpha;
-  swGainR.gain.value = alpha;
-  swGainCrossL.gain.value = beta;
-  swGainCrossR.gain.value = beta;
-
-  // L' = L*alpha + R*beta
-  swSplitter.connect(swGainL, 0, 0);
-  swSplitter.connect(swGainCrossR, 1, 0);
-  swGainL.connect(swMerger, 0, 0);
-  swGainCrossR.connect(swMerger, 0, 0);
-  // R' = L*beta + R*alpha
-  swSplitter.connect(swGainCrossL, 0, 0);
-  swSplitter.connect(swGainR, 1, 0);
-  swGainCrossL.connect(swMerger, 0, 1);
-  swGainR.connect(swMerger, 0, 1);
-
-  stereoWidthNode = { splitter: swSplitter, gains: [swGainL, swGainR, swGainCrossL, swGainCrossR], merger: swMerger };
-
-  // Surround: Haas effect (delay on left channel)
-  const surrSplitter = audioCtx.createChannelSplitter(2);
-  const surrDelay = audioCtx.createDelay(0.1);
-  surrDelay.delayTime.value = 0; // bypass real cuando está apagado
-  const surrMerger = audioCtx.createChannelMerger(2);
-
-  surrSplitter.connect(surrDelay, 0, 0);
-  surrDelay.connect(surrMerger, 0, 0);
-  surrSplitter.connect(surrMerger, 1, 1);
-
-  surroundNode = { splitter: surrSplitter, delay: surrDelay, merger: surrMerger };
-
-  // Bass Boost
-  bassBoostFilter = audioCtx.createBiquadFilter();
-  bassBoostFilter.type = 'lowshelf';
-  bassBoostFilter.frequency.value = 80;
-  bassBoostFilter.Q.value = 0.8;
-  const savedBass = localStorage.getItem('fx_bass_boost') === 'true';
-  bassBoostFilter.gain.value = savedBass ? 6 : 0;
-
-  // Connect chain: input → swSplitter → swMerger → surrSplitter → surrMerger → bassBoost → output
-  inputNode.connect(swSplitter);
-  swMerger.connect(surrSplitter);
-  surrMerger.connect(bassBoostFilter);
-
-  effectsInjected = true;
-
-  // Restore surround state
-  const savedSurround = localStorage.getItem('fx_surround') === 'true';
-  surrDelay.delayTime.value = savedSurround ? 0.025 : 0;
-
-  return bassBoostFilter;
-}
-
-function updateStereoWidth(percent) {
-  if (!stereoWidthNode) return;
-  const widthNorm = percent / 100;
-  const alpha = (1 + widthNorm) / 2;
-  const beta  = (1 - widthNorm) / 2;
-  stereoWidthNode.gains[0].gain.value = alpha; // L_self
-  stereoWidthNode.gains[1].gain.value = alpha; // R_self
-  stereoWidthNode.gains[2].gain.value = beta;  // L_cross
-  stereoWidthNode.gains[3].gain.value = beta;  // R_cross
-  localStorage.setItem('fx_stereo_width', percent);
-}
-
-function updateSurround(enabled) {
-  if (!surroundNode) return;
-  surroundNode.delay.delayTime.value = enabled ? 0.025 : 0;
-  localStorage.setItem('fx_surround', enabled);
-}
-
-function updateBassBoost(enabled) {
-  if (!bassBoostFilter) return;
-  bassBoostFilter.gain.value = enabled ? 6 : 0;
-  localStorage.setItem('fx_bass_boost', enabled);
-}
-
-/* ── Effects Panel UI ── */
-function initEffectsPanel() {
-  const btnToggle = document.getElementById('btnEffectsToggle');
-  const panel     = document.getElementById('effectsPanel');
-  if (!panel) return;
-
-  function toggleEffects() {
-    effectsActive = !effectsActive;
-    panel.classList.toggle('hidden', !effectsActive);
-    if (effectsActive) initEqualizer(true).catch((e) => console.error('FX error:', e));
-    if (btnToggle) btnToggle.classList.toggle('effects-active', effectsActive);
-    // Close EQ panel if open
-    if (effectsActive && eqActive) {
-      eqActive = false;
-      const eqPanel = document.getElementById('eqPanel');
-      if (eqPanel) eqPanel.classList.add('hidden');
-      const eqBtn = document.getElementById('btnEqToggle');
-      if (eqBtn) eqBtn.classList.remove('eq-active');
-    }
-    if (effectsActive && infoActive) {
-      infoActive = false;
-      const infoPanel = document.getElementById('infoPanel');
-      if (infoPanel) infoPanel.classList.add('hidden');
-      const infoBtn = document.getElementById('btnInfoToggle');
-      if (infoBtn) infoBtn.classList.remove('info-active');
-    }
-  }
-
-  if (btnToggle) btnToggle.addEventListener('click', toggleEffects);
-
-  // Stereo Width slider
-  const swSlider = document.getElementById('stereoWidthSlider');
-  const swVal    = document.getElementById('stereoWidthVal');
-  const rawWidth = parseFloat(localStorage.getItem('fx_stereo_width') || '100');
-  const savedWidth = Number.isFinite(rawWidth) ? rawWidth : 100;
-  if (swSlider) {
-    if (!Number.isNaN(savedWidth)) {
-      swSlider.value = String(savedWidth);
-      if (swVal) swVal.textContent = `${savedWidth}%`;
-    }
-    swSlider.addEventListener('input', () => {
-      const val = parseInt(swSlider.value);
-      swVal.textContent = val + '%';
-      updateStereoWidth(val);
-    });
-  }
-
-  // Surround toggle
-  const surrToggle = document.getElementById('surroundToggle');
-  const surrStatus = document.getElementById('surroundStatus');
-  const savedSurround = localStorage.getItem('fx_surround') === 'true';
-  if (surrToggle) {
-    surrToggle.checked = savedSurround;
-    if (surrStatus) surrStatus.textContent = savedSurround ? 'ON' : 'OFF';
-    surrToggle.addEventListener('change', () => {
-      const on = surrToggle.checked;
-      surrStatus.textContent = on ? 'ON' : 'OFF';
-      updateSurround(on);
-    });
-  }
-
-  // Bass Boost toggle
-  const bassToggle = document.getElementById('bassBoostToggle');
-  const bassStatus = document.getElementById('bassBoostStatus');
-  const savedBass = localStorage.getItem('fx_bass_boost') === 'true';
-  if (bassToggle) {
-    bassToggle.checked = savedBass;
-    if (bassStatus) bassStatus.textContent = savedBass ? 'ON' : 'OFF';
-    bassToggle.addEventListener('change', () => {
-      const on = bassToggle.checked;
-      bassStatus.textContent = on ? 'ON' : 'OFF';
-      updateBassBoost(on);
-    });
-  }
-
-  // Reset all effects to Normal
-  document.getElementById('btnEffectsReset')?.addEventListener('click', () => {
-    // Reset Stereo Width to 100%
-    const swSlider = document.getElementById('stereoWidthSlider');
-    const swVal = document.getElementById('stereoWidthVal');
-    if (swSlider) { swSlider.value = '100'; }
-    if (swVal) { swVal.textContent = '100%'; }
-    updateStereoWidth(100);
-
-    // Reset Surround to off
-    const surrToggle = document.getElementById('surroundToggle');
-    const surrStatus = document.getElementById('surroundStatus');
-    if (surrToggle) { surrToggle.checked = false; }
-    if (surrStatus) { surrStatus.textContent = 'OFF'; }
-    updateSurround(false);
-
-    // Reset Bass Boost to off
-    const bassToggle = document.getElementById('bassBoostToggle');
-    const bassStatus = document.getElementById('bassBoostStatus');
-    if (bassToggle) { bassToggle.checked = false; }
-    if (bassStatus) { bassStatus.textContent = 'OFF'; }
-    updateBassBoost(false);
-  });
 }
 
 function initCarousel() {
@@ -1965,14 +1522,11 @@ function play(url, name, uuid) {
   const displayTime = document.getElementById('radioDisplayTime');
   if (displayTime) displayTime.textContent = '00:00';
 
-  // Los HTTP se proxifican por mixed content. Además, si Web Audio está
-  // activo (EQ/efectos), cualquier stream va por el proxy same-origin para
-  // que createMediaElementSource no lo silencie en Android/Chrome.
+  // Los HTTP se proxifican por mixed content.
   const isHttp = url.startsWith('http://');
-  const forceProxy = shouldProxyForWebAudio();
-  const useProxy = isHttp || forceProxy;
+  const useProxy = isHttp;
   const finalUrl = useProxy ? getApiUrl(`/proxy?url=${encodeURIComponent(url)}`) : url;
-  console.log('[PLAY] finalUrl=%s proxied=%s fxProxy=%s', finalUrl, useProxy ? 'yes' : 'no', forceProxy ? 'yes' : 'no');
+  console.log('[PLAY] finalUrl=%s proxied=%s', finalUrl, useProxy ? 'yes' : 'no');
 
   if (useProxy) {
     // Same-origin. No forzamos CORS.
@@ -1994,17 +1548,6 @@ function play(url, name, uuid) {
   audio.addEventListener('canplay', () => {
     console.log('[PLAY] canplay event fired for %s', name);
   }, { once: true });
-
-  // Initialize/Resume Equalizer safely
-  if (typeof initEqualizer === 'function') {
-    initEqualizer().catch((e) => console.error('Equalizer error:', e));
-  }
-
-  // Reset duck gain if it was left ducked by news
-  if (duckGain) {
-    duckGain.gain.cancelScheduledValues(audioCtx.currentTime);
-    duckGain.gain.setValueAtTime(1.0, audioCtx.currentTime);
-  }
 
   // Play
   player.play().then(() => {
@@ -3456,15 +2999,8 @@ function checkNewsHour() {
 }
 
 function duckRadio(shouldDuck) {
-  if (window.isIOSDirectAudio) {
-    const audio = document.getElementById('audioPlayer');
-    if (audio) audio.volume = shouldDuck ? 0.12 : 1.0;
-    return;
-  }
-  if (!duckGain || !audioCtx) return;
-  // iOS Safari no procesa rampas programadas cuando el context está suspended.
-  // Usamos .value directo que funciona siempre.
-  duckGain.gain.value = shouldDuck ? 0.12 : 1.0;
+  const audio = document.getElementById('audioPlayer');
+  if (audio) audio.volume = shouldDuck ? 0.12 : 1.0;
 }
 
 async function triggerNews() {
@@ -3524,42 +3060,9 @@ async function triggerNews() {
 }
 
 async function playTTSWithWebAudio(text) {
-  if (!audioCtx) { duckRadio(false); newsPlaying = false; return; }
-
-  // Resume AudioContext si está suspended (iOS Safari)
-  if (audioCtx.state === 'suspended') {
-    try { await audioCtx.resume(); } catch (e) {}
-  }
-
-  const ttsUrl = getApiUrl('/api/tts?text=' + encodeURIComponent(text));
-
-  try {
-    const resp = await fetch(ttsUrl);
-    if (!resp.ok) throw new Error('fetch failed');
-    const buffer = await resp.arrayBuffer();
-    const audioBuffer = await audioCtx.decodeAudioData(buffer);
-
-    const source = audioCtx.createBufferSource();
-    source.buffer = audioBuffer;
-
-    const ttsGain = audioCtx.createGain();
-    ttsGain.gain.value = 1.0;
-
-    source.connect(ttsGain);
-    ttsGain.connect(audioCtx.destination);
-
-    source.start(0);
-
-    source.onended = () => {
-      duckRadio(false);
-      newsPlaying = false;
-      source.disconnect();
-      ttsGain.disconnect();
-    };
-  } catch (e) {
-    duckRadio(false);
-    newsPlaying = false;
-  }
+  // TTS por Web Audio retirado junto con el ecualizador y los efectos.
+  duckRadio(false);
+  newsPlaying = false;
 }
 
 function isGenericOrArtifactTitle(title) {
@@ -4041,23 +3544,7 @@ function initInfoPanel() {
     infoActive = !infoActive;
     panel.classList.toggle('hidden', !infoActive);
     if (btnToggle) btnToggle.classList.toggle('info-active', infoActive);
-    // Close other panels
-    if (infoActive && typeof eqActive !== 'undefined') {
-      const eqPanel = document.getElementById('eqPanel');
-      if (eqPanel && !eqPanel.classList.contains('hidden')) {
-        eqActive = false;
-        eqPanel.classList.add('hidden');
-        const eqBtn = document.getElementById('btnEqToggle');
-        if (eqBtn) eqBtn.classList.remove('eq-active');
-      }
-      const fxPanel = document.getElementById('effectsPanel');
-      if (fxPanel && !fxPanel.classList.contains('hidden')) {
-        effectsActive = false;
-        fxPanel.classList.add('hidden');
-        const fxBtn = document.getElementById('btnEffectsToggle');
-        if (fxBtn) fxBtn.classList.remove('effects-active');
-      }
-    }
+
   }
 
   if (btnToggle) btnToggle.addEventListener('click', toggleInfo);
