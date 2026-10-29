@@ -2,6 +2,11 @@
 
 ## Último Realizado
 
+- **29-10-2026:**
+  - El fondo de la pantalla ahora cambia suavemente entre distintos tonos pastel oscuros cada vez que cambia la canción.
+  - Los nombres de canciones que llevan paréntesis ahora se muestran completos sin cortarse.
+- **25-10-2026:**
+  - Pasamos la interfaz a un modo reposado y oscuro cálido que ahorra batería en pantallas de celular y apagamos efectos y luces parpadeantes continuas.
 - **15-10-2026:**
   - En la pantalla del auto (Apple Car Play y Android Auto) ahora el nombre del artista aparece donde antes se veía el nombre de la emisora, y arriba se ve solo el nombre de la canción.
   - El nombre de la emisora sigue disponible, como dato secundario de la canción que está sonando.

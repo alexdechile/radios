@@ -267,7 +267,17 @@ class StreamsMixin:
         if not title:
             return None
         t = title.strip()
-        t = re.sub(r"StreamTitle='?([^;']*)'?.*", r"\1", t)
+        # Robustly extract stream title without truncating at apostrophes or quotes
+        m = re.search(
+            r"StreamTitle='(.*?)'(?:\s*;\s*[a-zA-Z_-]+='|\s*;\s*$|$)",
+            t,
+            re.DOTALL,
+        )
+        if m:
+            t = m.group(1)
+        else:
+            t = re.sub(r"^StreamTitle='?", "", t)
+            t = re.sub(r"'(?:\s*;.*)?$", "", t)
         t = re.sub(r"<[^>]+>", "", t)
         if not t.strip():
             return None
@@ -477,9 +487,17 @@ class StreamsMixin:
                 meta_data += chunk
 
             meta_str = meta_data.decode("utf-8", errors="replace")
-            m = re.search(r"StreamTitle='([^']*)'", meta_str, re.IGNORECASE)
+            m = re.search(
+                r"StreamTitle='(.*?)'(?:\s*;\s*[a-zA-Z_-]+='|\s*;\s*$|$)",
+                meta_str,
+                re.DOTALL,
+            )
             if m:
                 title = m.group(1).strip()
+                return title if title else None
+            m2 = re.search(r"StreamTitle='([^']*)'", meta_str, re.IGNORECASE)
+            if m2:
+                title = m2.group(1).strip()
                 return title if title else None
             return None
         finally:

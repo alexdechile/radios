@@ -340,12 +340,35 @@ class MediaInfoMixin:
         if not text:
             return ""
         t = text.strip()
-        # Fix broken or cutoff apostrophes at the end of word or line
-        # e.g. "Don " -> "Don't ", "It " -> "It's ", or trailing apostrophe
-        t = re.sub(r"^(Don|Can|Won|Didn|Isn|Aren|Couldn|Wouldn|Shouldn)\b(?!\w|')", r"\1't", t, flags=re.IGNORECASE)
-        t = re.sub(r"^It\b(?!\w|')", "It's", t, flags=re.IGNORECASE)
-        t = re.sub(r"\b(Don|Can|Won|Didn|Isn|Aren|Couldn|Wouldn|Shouldn)\s+([A-Z])", r"\1't \2", t)
+        # Fix broken or missing apostrophes in negative contractions (e.g. "Dont" -> "Don't", "Don t" -> "Don't")
+        # Never alter standalone "Don" (e.g. Miranda! - "Don", "Don Omar", "Don (sometimes)")
+        t = re.sub(
+            r"\b(Dont|Cant|Wont|Didnt|Isnt|Arent|Couldnt|Wouldnt|Shouldnt)\b",
+            lambda m: m.group(1)[:-1] + "'t",
+            t,
+            flags=re.IGNORECASE,
+        )
+        t = re.sub(
+            r"\b(Don|Can|Won|Didn|Isn|Aren|Couldn|Wouldn|Shouldn)\s+t\b",
+            r"\1't",
+            t,
+            flags=re.IGNORECASE,
+        )
+        t = re.sub(r"\bIts\s+([A-Z])", r"It's \1", t)
         return t.strip()
+
+    def _clean_search_query_track(self, track):
+        """Remove common suffixes like (Radio Edit), [Official], (remaster...) ONLY for querying
+        MusicBrainz/Wikipedia, so the displayed song title never loses its original parentheses."""
+        if not track:
+            return ""
+        clean = re.sub(
+            r"\s*(\(|\[)(radio edit|official|remaster|live|acoustic|version|feat\.?.*)(\)|\])",
+            "",
+            track,
+            flags=re.IGNORECASE,
+        ).strip()
+        return clean or track
 
     def _parse_title(self, raw_title):
         """Parse 'Artist - Track' or 'Artist – Track' or 'Artist | Track' from raw_title,
@@ -385,14 +408,6 @@ class MediaInfoMixin:
                     flags=re.IGNORECASE,
                 ).strip()
 
-                # Remove common suffixes like (Radio Edit), [Official], etc.
-                song = re.sub(
-                    r"\s*(\(|\[)(radio edit|official|remaster|live|acoustic|version|feat\.?.*)(\)|\])",
-                    "",
-                    song,
-                    flags=re.IGNORECASE,
-                ).strip()
-
                 # Remove station branding if present at the end of song
                 song = re.sub(
                     r"\s*(\||\/\/)\s*.*",
@@ -410,22 +425,30 @@ class MediaInfoMixin:
 
     def _search_song_info(self, raw_title):
         artist, song = self._parse_title(raw_title)
-        base = {"raw_title": raw_title, "artist": artist, "track": song}
+        full_song = song
+        query_song = self._clean_search_query_track(song)
+        base = {"raw_title": raw_title, "artist": artist, "track": full_song}
 
         # If song or artist is suspiciously empty or extremely short without substance, skip
         if not song or (len(song) <= 2 and not artist):
             return base
 
         # ── 1) MusicBrainz (primary source for structured data + cover art) ──
-        mb = self._search_musicbrainz(artist, song)
+        mb = self._search_musicbrainz(artist, query_song)
         if mb:
+            # Si el título transmitido tenía paréntesis (ej. "Don (sometimes)")
+            # y el registro de MusicBrainz vino solo con el nombre raíz ("Don"),
+            # no descartar la información entre paréntesis de la emisora.
+            mb_track = mb.get("track") or ""
+            if "(" in full_song and ")" in full_song and "(" not in mb_track:
+                mb["track"] = full_song
             base.update(mb)
             base.setdefault("artist", artist)
             base["source"] = "musicbrainz"
             # Wikipedia as complement for description + wiki_url (song-specific)
             eff_artist = mb.get("artist") or artist
             eff_track = base.get("track") or song
-            wiki = self._search_wikipedia_song(eff_artist, eff_track)
+            wiki = self._search_wikipedia_song(eff_artist, self._clean_search_query_track(eff_track))
             if wiki:
                 base.setdefault("description", wiki.get("description"))
                 base.setdefault("wiki_url", wiki.get("wiki_url"))
@@ -436,18 +459,21 @@ class MediaInfoMixin:
 
         # ── 2) Wikipedia song search (fallback with strict validation) ──
         if artist and song and len(song) >= 2:
-            wiki = self._search_wikipedia_song(artist, song)
+            wiki = self._search_wikipedia_song(artist, query_song)
             if wiki:
                 base.update(wiki)
                 base["source"] = "wikipedia"
+                base["track"] = full_song
                 return base
 
         # ── 3) DuckDuckGo → Wikipedia (last resort, strict song check) ──
         if artist and song and len(song) >= 3:
-            ddg = self._search_duckduckgo_song(f"{artist} {song}")
+            ddg = self._search_duckduckgo_song(f"{artist} {query_song}")
             if ddg:
                 base.update(ddg)
                 base["source"] = "duckduckgo"
+                base["track"] = full_song
+                return base
                 return base
 
         return base

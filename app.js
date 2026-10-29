@@ -6,7 +6,7 @@
 const API_SERVERS = ['de1', 'de2', 'nl1', 'at1'];
 const UA = 'RadiosSketchApp/1.0';
 const STORE_KEY = 'radios_playlist';
-const APP_VERSION = '1.6.21';
+const APP_VERSION = '1.6.22';
 
 // Resolve API path relative to base path (handles /radios subpath on production)
 function getApiUrl(path) {
@@ -1655,6 +1655,7 @@ async function startMetadataTracker(uuid, stationUrl) {
           if (data.title !== previousTitle && data.title !== lastSongInfoTitle) {
             fetchSongInfo(data.title);
           }
+          applySongTheme(data.title);
         } else if (trackEl) {
           trackEl.classList.add('hidden');
         }
@@ -3094,6 +3095,143 @@ function isGenericOrArtifactTitle(title) {
   );
 }
 
+/* ═══════════════════════════════════════════════════════════
+   TEMAS PASTEL OSCURO DINÁMICOS (POR CANCIÓN)
+   Cambio de atmósfera suave que conserva el descanso visual
+   y el contraste en pantallas OLED/móviles.
+   ═══════════════════════════════════════════════════════════ */
+const DARK_PASTEL_THEMES = [
+  // 1. Lavanda Noche (tema base / sereno)
+  {
+    name: 'lavender',
+    page: '#0f1016',
+    card: '#161722',
+    soft: '#1d1e2c',
+    border: 'rgba(196, 176, 219, 0.12)',
+    accent: '#c4b0db'
+  },
+  // 2. Salvia Silenciosa (verde bosque reposado)
+  {
+    name: 'sage',
+    page: '#0d1311',
+    card: '#141d19',
+    soft: '#1b2722',
+    border: 'rgba(134, 202, 164, 0.12)',
+    accent: '#86caa4'
+  },
+  // 3. Melocotón Cálido (ámbar oscuro relajante)
+  {
+    name: 'peach',
+    page: '#14100e',
+    card: '#1e1713',
+    soft: '#291f1a',
+    border: 'rgba(232, 191, 132, 0.12)',
+    accent: '#e8bf84'
+  },
+  // 4. Cielo Nocturno (azul empolvado tenue)
+  {
+    name: 'sky',
+    page: '#0d1218',
+    card: '#131a24',
+    soft: '#192432',
+    border: 'rgba(146, 191, 224, 0.12)',
+    accent: '#92bfe0'
+  },
+  // 5. Rosa Ceniza (malva tenue que ahorra batería)
+  {
+    name: 'rose',
+    page: '#140f13',
+    card: '#1e151c',
+    soft: '#281d26',
+    border: 'rgba(229, 154, 154, 0.12)',
+    accent: '#e59a9a'
+  },
+  // 6. Menta Serena (verde menta oscuro)
+  {
+    name: 'mint',
+    page: '#0d1413',
+    card: '#121f1d',
+    soft: '#182a27',
+    border: 'rgba(130, 209, 186, 0.12)',
+    accent: '#82d1ba'
+  },
+  // 7. Ciruela Suave (violeta crepuscular)
+  {
+    name: 'plum',
+    page: '#130e17',
+    card: '#1b1421',
+    soft: '#251b2d',
+    border: 'rgba(208, 179, 230, 0.12)',
+    accent: '#d0b3e6'
+  },
+  // 8. Océano Calmo (azul índigo reposado)
+  {
+    name: 'indigo',
+    page: '#0e1019',
+    card: '#141724',
+    soft: '#1b1f32',
+    border: 'rgba(159, 174, 229, 0.12)',
+    accent: '#9faee5'
+  }
+];
+
+let currentAppliedThemeSong = null;
+let currentThemeIndex = 0;
+
+function hashStringToThemeIndex(str) {
+  if (!str) return 0;
+  let hash = 0;
+  const clean = String(str).toLowerCase().trim();
+  for (let i = 0; i < clean.length; i++) {
+    hash = ((hash << 5) - hash) + clean.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash) % DARK_PASTEL_THEMES.length;
+}
+
+function applySongTheme(songTitle) {
+  const title = String(songTitle || '').trim();
+  if (!title || isGenericOrArtifactTitle(title)) {
+    if (currentAppliedThemeSong === null) return;
+    currentAppliedThemeSong = null;
+    currentThemeIndex = 0;
+    setDarkPastelTheme(DARK_PASTEL_THEMES[0]);
+    return;
+  }
+  if (title === currentAppliedThemeSong) return;
+
+  let targetIndex = hashStringToThemeIndex(title);
+  if (targetIndex === currentThemeIndex && title !== currentAppliedThemeSong) {
+    targetIndex = (targetIndex + 1) % DARK_PASTEL_THEMES.length;
+  }
+  currentThemeIndex = targetIndex;
+  currentAppliedThemeSong = title;
+  setDarkPastelTheme(DARK_PASTEL_THEMES[targetIndex]);
+}
+
+function setDarkPastelTheme(theme) {
+  if (!theme) return;
+  const root = document.documentElement;
+  root.style.setProperty('--bg-page', theme.page);
+  root.style.setProperty('--bg-card', theme.card);
+  root.style.setProperty('--bg-soft', theme.soft);
+  if (theme.border) root.style.setProperty('--border', theme.border);
+
+  if (document.body) {
+    document.body.style.backgroundColor = theme.page;
+  }
+  const appEl = document.getElementById('app') || document.querySelector('.app-card');
+  if (appEl) {
+    appEl.style.backgroundColor = theme.card;
+  }
+
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if (metaTheme) {
+    metaTheme.setAttribute('content', theme.page);
+  }
+}
+window.applySongTheme = applySongTheme;
+
 /* ── Song Info Popup ── */
 function buildFallbackSongData(title) {
   return {
@@ -3138,6 +3276,7 @@ async function fetchSongInfo(title, options = {}) {
     const hasData = data && !data.error &&
       (data.artist || data.genre || data.album || data.track);
     if (!hasData) return;
+    applySongTheme(data.track || data.raw_title || title);
     showSongPopup(data);
   } catch (_) {}
 }
@@ -3278,7 +3417,17 @@ function showSongPopup(data) {
 
   const artist = data.artist || '';
   // Show parsed track if artist is known, otherwise show raw_title
-  const track = (artist && data.track) ? data.track : (data.raw_title || data.track || '');
+  let track = (artist && data.track) ? data.track : (data.raw_title || data.track || '');
+
+  // Preservar paréntesis originales si la transmisión los incluía (ej: "Don (sometimes)")
+  // y la metadata de catálogo vino recortada ("Don").
+  const rawParts = splitTrackTitle(data.raw_title || '');
+  const rawSong = rawParts.song || '';
+  if (rawSong && rawSong.includes('(') && rawSong.includes(')') && !track.includes('(')) {
+    if (rawSong.toLowerCase().startsWith(track.toLowerCase())) {
+      track = rawSong;
+    }
+  }
 
   trackEl.textContent = track;
   if (artist) {
@@ -4091,5 +4240,17 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('No hay información de canción disponible');
       }
     });
+  });
+
+  // Detección de cambio de canción vía HTMX para alternar el fondo pastel oscuro
+  document.body.addEventListener('htmx:afterSwap', (evt) => {
+    const target = evt.detail?.target || evt.target;
+    if (target && target.id === 'htmxNowPlaying') {
+      const titleEl = target.querySelector('.htmx-np-title');
+      const songTitle = titleEl ? titleEl.textContent.trim() : '';
+      if (songTitle && !isGenericOrArtifactTitle(songTitle)) {
+        applySongTheme(songTitle);
+      }
+    }
   });
 });

@@ -11,9 +11,9 @@
 
   <link rel="stylesheet" href="vendor/plyr/plyr.css">
 
-  <link rel="stylesheet" href="style.css?v=1.6.21">
+  <link rel="stylesheet" href="style.css?v=1.6.22">
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#D4A017">
+  <meta name="theme-color" content="#161722">
   <link rel="apple-touch-icon" href="icon-192.png">
 
   <!-- HTMX — polling automático sin escribir JS -->
@@ -386,8 +386,8 @@
               <span class="song-popup-cover-expand"><i class="fas fa-expand"></i></span>
             </button>
             <div class="song-popup-titles">
-              <div class="song-popup-track" id="popupTrack"></div>
               <div class="song-popup-artist" id="popupArtist"></div>
+              <div class="song-popup-track" id="popupTrack"></div>
             </div>
           </div>
           <div class="song-popup-desc hidden" id="popupDesc"></div>
@@ -449,7 +449,7 @@
   </main>
 
   <script src="vendor/plyr/plyr.js"></script>
-  <script src="app.js?v=1.6.21"></script>
+  <script src="app.js?v=1.6.22"></script>
 
   <!-- HTMX Bridge: actualiza hx-get con URL+nombre de la estación activa -->
   <script>
@@ -477,6 +477,9 @@
       bar.innerHTML = '<div class="htmx-np-inner htmx-np-idle"><span class="htmx-np-pulse">&#9835;</span><div class="htmx-np-texts"><span class="htmx-np-station">Radios App</span><span class="htmx-np-title">Selecciona una emisora para comenzar</span><span class="htmx-np-subtitle"><i class="fas fa-sparkles"></i> Transmisión en vivo y metadatos</span></div></div>';
       // Re-procesar: sin hx-get el poll cada 15s deja de pedir la canción anterior
       htmx.process(bar);
+      if (typeof window.applySongTheme === 'function') {
+        window.applySongTheme('');
+      }
     };
   </script>
 
