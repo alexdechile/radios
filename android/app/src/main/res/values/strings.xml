@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Radios</string>
+    <string name="error_connection">No se pudo conectar con Radios.\nRevisa tu conexión a internet.</string>
+    <string name="retry">Reintentar</string>
+</resources>

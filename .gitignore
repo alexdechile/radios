@@ -25,3 +25,12 @@ radios_rate_limit.db*
 
 # Cachés de runtime (metadata de canción y letras)
 radios_cache.db*
+
+# Android build artifacts
+android/.gradle/
+android/build/
+android/app/build/
+android/.idea/
+android/local.properties
+*.apk
+*.aab

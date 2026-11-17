@@ -2,6 +2,18 @@
 
 ## Último Realizado
 
+- **17-11-2026:**
+  - Creamos el proyecto Android en la carpeta `android/` para instalar Radios como una aplicación en el celular apuntando directo al Funnel de Tailscale, junto con su compilación automática de APK en la nube.
+- **12-11-2026:**
+  - Las tarjetas de cada radio y el fondo degradé donde flotan ahora toman los colores de la carátula o imagen de lo que está sonando; cuando no hay imagen disponible, eligen un color pastel suave al azar.
+  - Al cambiar de emisora desde los controles del auto (Android Auto o CarPlay), la aplicación ahora avanza o retrocede siempre a partir de la radio que está sonando en ese momento en vez de volver a la primera o última de la lista.
+  - Corregimos el problema donde la app se desconectaba tras varios cambios de emisora seguidos, liberando de inmediato las conexiones previas y manteniendo activa la sesión en segundo plano.
+  - Si una emisora no está transmitiendo o da error al sintonizarla, la app ahora busca y salta automáticamente a la siguiente en lugar de detenerse.
+- **05-11-2026:**
+  - Toda la música ahora se controla directamente desde las tarjetas de radio: eliminamos el reproductor de arriba y pusimos botones en el borde de cada radio (reproducir/parar arriba, anterior y siguiente a los lados, y ver datos abajo).
+  - El nombre de la canción que está sonando ahora se ve directamente dentro de la tarjeta de la radio.
+  - El botón inferior de la tarjeta permite dejar la ficha de la canción fija en pantalla sin que se cierre sola (ideal para usar en el tablet).
+  - Eliminamos definitivamente la función de noticias por voz.
 - **29-10-2026:**
   - El fondo de la pantalla ahora cambia suavemente entre distintos tonos pastel oscuros cada vez que cambia la canción.
   - Los nombres de canciones que llevan paréntesis ahora se muestran completos sin cortarse.
