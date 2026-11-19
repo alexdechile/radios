@@ -2,10 +2,14 @@ package cl.donalex.radios
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.webkit.PermissionRequest
@@ -32,6 +36,21 @@ class MainActivity : AppCompatActivity() {
 
     private var pendingAudioPermissionRequest: PermissionRequest? = null
     private var hasMainFrameError = false
+
+    private val stopPlaybackReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == PlaybackService.ACTION_STOP_PLAYBACK) {
+                webView.evaluateJavascript(
+                    "if (window.player && typeof window.player.pause === 'function') { window.player.pause(); }",
+                    null
+                )
+            }
+        }
+    }
+
+    private val requestNotificationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ -> }
 
     private val requestMicPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -63,11 +82,36 @@ class MainActivity : AppCompatActivity() {
 
         configureWebView()
         setupBackNavigation()
+        requestNotificationPermissionIfNeeded()
+
+        ContextCompat.registerReceiver(
+            this,
+            stopPlaybackReceiver,
+            IntentFilter(PlaybackService.ACTION_STOP_PLAYBACK),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState)
         } else {
             loadApp()
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        ContextCompat.startForegroundService(this, Intent(this, PlaybackService::class.java))
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
     }
 
@@ -180,6 +224,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        try {
+            unregisterReceiver(stopPlaybackReceiver)
+        } catch (_: IllegalArgumentException) {
+        }
+        if (isFinishing) {
+            stopService(Intent(this, PlaybackService::class.java))
+        }
         pendingAudioPermissionRequest?.deny()
         pendingAudioPermissionRequest = null
         webView.destroy()

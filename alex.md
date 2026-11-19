@@ -2,6 +2,8 @@
 
 ## Último Realizado
 
+- **19-11-2026:**
+  - Agregamos soporte de reproducción en segundo plano a la app de Android para que la radio siga sonando cuando se bloquea la pantalla del tablet o celular, con una notificación persistente y botón para detenerla.
 - **17-11-2026:**
   - Creamos el proyecto Android en la carpeta `android/` para instalar Radios como una aplicación en el celular apuntando directo al Funnel de Tailscale, junto con su compilación automática de APK en la nube.
 - **12-11-2026:**
